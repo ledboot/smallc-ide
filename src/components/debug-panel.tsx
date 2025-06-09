@@ -23,12 +23,6 @@ interface DebugPanelProps {
   currentFile: FileType | null
 }
 
-interface Breakpoint {
-  file: string
-  line: number
-  enabled: boolean
-}
-
 interface Variable {
   name: string
   value: string
@@ -38,8 +32,7 @@ interface Variable {
 export default function DebugPanel({ files, currentFile }: DebugPanelProps) {
   const [isDebugging, setIsDebugging] = useState(false)
   const [isPaused, setIsPaused] = useState(false)
-  const [breakpoints, setBreakpoints] = useState<Breakpoint[]>([])
-  const [variables, setVariables] = useState<Variable[]>([
+  const [variables] = useState<Variable[]>([
     { name: "argc", value: "1", type: "int" },
     { name: "argv", value: "0x7fff5fbff5c8", type: "char**" },
     { name: "result", value: "42", type: "int" },

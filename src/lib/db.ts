@@ -26,7 +26,7 @@ export const initDB = (): Promise<void> => {
 
     const request = window.indexedDB.open(DB_NAME, DB_VERSION);
 
-    request.onerror = (event) => {
+    request.onerror = () => {
       reject(new Error("Failed to open database"));
     };
 
@@ -163,7 +163,7 @@ export const deleteFile = async (id: string): Promise<void> => {
       const file = getRequest.result;
 
       // 从IndexedDB删除
-      const deleteTransaction = db.transaction([STORE_NAME], "readwrite");
+      const deleteTransaction = db!.transaction([STORE_NAME], "readwrite");
       const deleteStore = deleteTransaction.objectStore(STORE_NAME);
       const deleteRequest = deleteStore.delete(id);
 

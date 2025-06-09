@@ -1,12 +1,27 @@
 import { getAllFiles } from "./db";
-
+interface WasmModule {
+  FS: {
+    analyzePath: (path: string) => { exists: boolean };
+    mkdir: (path: string) => void;
+    isFile: (path: string) => boolean;
+    readFile: (path: string, opts?: { encoding?: string, flags?: string }) => string;
+    writeFile: (path: string, content: string) => void;
+    readdir: (path: string) => string[];
+    unlink: (path: string) => void;
+    chdir?: (path: string) => void;
+  };
+  onRuntimeInitialized: () => void;
+  callMain: (args: string[]) => number;
+  print: (...args: unknown[]) => void;
+  printErr: (...args: unknown[]) => void;
+}
 declare global {
   interface Window {
-    Module: any;
+    Module: WasmModule;
   }
 }
 
-let wasmModule: any = null;
+let wasmModule: WasmModule | null = null;
 let isModuleReady = false;
 
 
@@ -17,7 +32,6 @@ export const initWasmCompiler = (): Promise<void> => {
       return;
     }
 
-    // 先定义全局 Module 对象，设置 onRuntimeInitialized 回调
     window.Module = {
       onRuntimeInitialized: () => {
         wasmModule = window.Module;
@@ -32,7 +46,7 @@ export const initWasmCompiler = (): Promise<void> => {
           }
           getAllFiles().then((files) => {
             files.forEach((file) => {
-              wasmModule.FS.writeFile(`/workspace/${file.name}`, file.content);
+              wasmModule?.FS.writeFile(`/workspace/${file.name}`, file.content);
             });
           });
           const files = wasmModule.FS.readdir("/workspace");
@@ -54,7 +68,7 @@ export const initWasmCompiler = (): Promise<void> => {
         // 这里可以输出到控制台或页面元素
         console.log(text);
       }
-    };
+    } as unknown as WasmModule;
 
     // 检查 scc_wasm.js 是否存在
     fetch("/smallc_wasm.js")
@@ -107,7 +121,7 @@ export const readFileFromMemFS = (filename: string): string => {
   if (!isWasmReady()) {
     return "";
   }
-  return wasmModule.FS.readFile(filename, { encoding: "utf8" });
+  return wasmModule?.FS.readFile(filename, { encoding: "utf8" }) || "";
 };
 
 export const deleteFileFromMemFS = (filename: string): void => {
@@ -146,11 +160,11 @@ export const compileWithWasm = (filename: string): Promise<string> => {
       const originalPrint = wasmModule.print;
       const originalPrintErr = wasmModule.printErr;
 
-      wasmModule.print = (text: string) => {
+      wasmModule.print = (text: unknown) => {
         output += text + "\n";
       };
 
-      wasmModule.printErr = (text: string) => {
+      wasmModule.printErr = (text: unknown) => {
         output += "Error: " + text + "\n";
       };
 

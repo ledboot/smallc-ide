@@ -74,8 +74,9 @@ export default function SearchPanel({ files, onFileSelect }: SearchPanelProps) {
 
             if (!regex.global) break
           }
-        } catch (error) {
+        } catch (e) {
           // Invalid regex, skip
+          console.error(e)
         }
       })
     })
