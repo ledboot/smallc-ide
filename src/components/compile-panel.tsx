@@ -19,29 +19,35 @@ import {
   CheckCircleIcon,
   InfoIcon,
   FileIcon,
+  Copy,
 } from "lucide-react";
 import type { FileType } from "@/lib/types";
 import { compileWithWasm, isWasmReady } from "@/lib/wasm-compiler";
-import { getFileFromMemFS, saveFileToIndexedDBOnly } from "@/lib/db";
+import { getFileFromMemFS } from "@/lib/db";
+import { toast } from "sonner";
+
+import { Asm } from "@/lib/asm";
 
 interface CompilePanelProps {
   files: FileType[];
-  setFiles: (files: FileType[]) => void;
-  compilationOutput: string;
-  setCompilationOutput: (output: string) => void;
+  // setFiles: (files: FileType[]) => void;
 }
 
 export default function CompilePanel({
   files,
-  setFiles,
-  compilationOutput,
-  setCompilationOutput,
-}: CompilePanelProps) {
+}: // setFiles,
+CompilePanelProps) {
   const [selectedFile, setSelectedFile] = useState<string>("");
   const [isCompiling, setIsCompiling] = useState(false);
   const [compilationSuccess, setCompilationSuccess] = useState<boolean | null>(
     null
   );
+  const [compilationOutput, setCompilationOutput] = useState<string>("");
+
+  // 新增：缓存编译结果，key为文件名
+  const [compiledMap, setCompiledMap] = useState<
+    Map<string, { bytecode: string; abi: string }>
+  >(new Map());
 
   // 过滤出.c文件
   const cFiles = files.filter((file) => file.name.endsWith(".c"));
@@ -53,6 +59,12 @@ export default function CompilePanel({
     }
   }, [cFiles, selectedFile]);
 
+  // 复制到剪切板
+  const handleCopy = async (text: string) => {
+    if (!text) return;
+    await navigator.clipboard.writeText(text);
+    toast.success("复制成功");
+  };
 
   const handleCompile = async () => {
     if (!selectedFile) {
@@ -81,7 +93,8 @@ export default function CompilePanel({
         if (output) {
           setCompilationOutput(`Compilation successful for ${file.name}`);
           setCompilationSuccess(true);
-          await getCompileOutput(file);
+          // 编译成功后获取bytecode和abi
+          await getBytecodeAndAbi(file);
         } else {
           setCompilationOutput(`Compilation failed for ${file.name}`);
           setCompilationSuccess(false);
@@ -101,17 +114,33 @@ export default function CompilePanel({
     }
   };
 
-  const getCompileOutput = async (file: FileType) => {
+  // 新增：获取bytecode和abi并存入map
+  const getBytecodeAndAbi = async (file: FileType) => {
     const asmFile = await getFileFromMemFS(
       `/workspace/${file.name.split(".")[0]}.asm`
     );
-    await saveFileToIndexedDBOnly(asmFile);
+    const asm = Asm.assemble(asmFile.content);
     const abiFile = await getFileFromMemFS(
       `/workspace/${file.name.split(".")[0]}.abi`
     );
-    await saveFileToIndexedDBOnly(abiFile);
-    setFiles([...files, asmFile, abiFile]);
+    if (asm.success && abiFile?.content) {
+      setCompiledMap((prev) => {
+        const newMap = new Map(prev);
+        newMap.set(file.name, {
+          bytecode: asm.bytecode,
+          abi: abiFile.content,
+        });
+        return newMap;
+      });
+    }
   };
+
+  // 当前选中文件的编译结果
+  const compiledData = compiledMap.get(
+    cFiles.find((f) => f.id === selectedFile)?.name || ""
+  );
+  const isBytecodeAvailable = !!compiledData?.bytecode;
+  const isAbiAvailable = !!compiledData?.abi;
 
   return (
     <div className="flex h-full flex-col p-3 space-y-3">
@@ -273,7 +302,27 @@ export default function CompilePanel({
         </CardHeader>
         <CardContent>
           <div className="h-48 overflow-auto rounded-md border bg-muted p-2 font-mono text-xs whitespace-pre-wrap">
-            {compilationOutput || "Compilation output will appear here..."}
+            {compilationOutput}
+          </div>
+          <div className="flex items-center gap-2 mt-2">
+            <Button
+              variant="outline"
+              className="cursor-pointer"
+              disabled={!isAbiAvailable}
+              onClick={() => handleCopy(compiledData?.abi || "")}
+            >
+              <Copy className="h-4 w-4" />
+              ABI
+            </Button>
+            <Button
+              variant="outline"
+              className="cursor-pointer"
+              disabled={!isBytecodeAvailable}
+              onClick={() => handleCopy(compiledData?.bytecode || "")}
+            >
+              <Copy className="h-4 w-4" />
+              Bytecode
+            </Button>
           </div>
         </CardContent>
       </Card>

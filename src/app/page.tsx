@@ -21,7 +21,6 @@ export default function SmallcIDE() {
   const [isLoading, setIsLoading] = useState(true);
   const [files, setFiles] = useState<FileType[]>([]);
   const [currentFile, setCurrentFile] = useState<FileType | null>(null);
-  const [compilationOutput, setCompilationOutput] = useState<string>("");
   const [activeSidebarTab, setActiveSidebarTab] = useState<SidebarTab>("files");
   const consoleRef = useRef<ConsolePanelRef>(null);
 
@@ -33,10 +32,6 @@ export default function SmallcIDE() {
 
     initialize();
   }, []);
-
-  useEffect(() => {
-    consoleRef.current?.appendLog(compilationOutput);
-  }, [compilationOutput]);
 
   const renderSidebarContent = () => {
     switch (activeSidebarTab) {
@@ -62,8 +57,6 @@ export default function SmallcIDE() {
           <CompilePanel
             files={files}
             setFiles={setFiles}
-            compilationOutput={compilationOutput}
-            setCompilationOutput={setCompilationOutput}
           />
         );
       case "deploy":
