@@ -19,20 +19,12 @@ interface DebugInfo {
   code?: string;
   endcode?: string;
   srcline?: number;
-  types?: any;
-  vars?: any[];
+  types?: unknown;
+  vars?: unknown[];
   begin?: number;
   end?: number;
   lines?: Array<[number, number]>;
   body?: number;
-}
-
-interface VariableInfo {
-  [key: string]: {
-    loc: string;
-    size: number;
-    type: string;
-  };
 }
 
 interface AssemblyResult {
@@ -94,7 +86,7 @@ export class Asm {
               }
             }
             continue;
-          } catch (e) {
+          } catch {
             console.warn(`Failed to parse debug info: ${line}`);
             continue;
           }
@@ -198,13 +190,13 @@ export class Asm {
   private static processAbiFunctions(line: string): string {
     // 处理 abi("string") 函数
     line = line.replace(/abi\("([^"]*)"\)/g, (match, str) => {
-      const hash = crypto.createHash('sha256').update(String(str ?? '')).digest('hex');
+      const hash = CryptoJS.SHA256(String(str ?? '')).toString(CryptoJS.enc.Hex);
       return "x" + hash.substring(0, 8);
     });
 
     // 处理 ABI("string") 函数
     line = line.replace(/ABI\("([^"]*)"\)/g, (match, str) => {
-      const hash = crypto.createHash('sha256').update(String(str ?? '')).digest('hex');
+      const hash = CryptoJS.SHA256(String(str ?? '')).toString(CryptoJS.enc.Hex);
       let x = hash.substring(0, 8);
       if (x === "00000000") x = "00000001";
       return "x" + x + "00000000";
@@ -237,9 +229,9 @@ export class Asm {
    */
   private static hasvar(info: DebugInfo | null, varName: string): string | null {
     if (!info?.vars) return null;
-    
     for (const varObj of info.vars) {
-      if (varObj[varName]) {
+      if (typeof varObj === 'object' && varObj !== null && varName in varObj) {
+        // @ts-expect-error varObj结构为Record<string, {loc: string}>
         return varObj[varName].loc;
       }
     }

@@ -56,7 +56,6 @@ export default function SmallcIDE() {
         return (
           <CompilePanel
             files={files}
-            setFiles={setFiles}
           />
         );
       case "deploy":
