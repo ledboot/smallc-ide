@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { RocketIcon, WalletIcon, FuelIcon as GasIcon, NetworkIcon, InfoIcon, ExternalLinkIcon } from "lucide-react"
+import { RocketIcon, FuelIcon as GasIcon, NetworkIcon, InfoIcon, ExternalLinkIcon } from "lucide-react"
 import type { FileType } from "@/lib/types"
 
 interface DeployPanelProps {
@@ -17,24 +17,20 @@ interface DeployPanelProps {
 }
 
 export default function DeployPanel({ files, currentFile }: DeployPanelProps) {
-  const [selectedNetwork, setSelectedNetwork] = useState("sepolia")
-  const [gasLimit, setGasLimit] = useState("3000000")
-  const [gasPrice, setGasPrice] = useState("20")
+  const [selectedNetwork, setSelectedNetwork] = useState("mainnet")
   const [isDeploying, setIsDeploying] = useState(false)
   const [deploymentResult, setDeploymentResult] = useState<string | null>(null)
 
-  const solidityFiles = files.filter((file) => file.name.endsWith(".sol"))
+  const cFiles = files.filter((file) => file.name.endsWith(".c"))
   const networks = [
-    { id: "mainnet", name: "Ethereum Mainnet", chainId: 1 },
-    { id: "sepolia", name: "Sepolia Testnet", chainId: 11155111 },
-    { id: "goerli", name: "Goerli Testnet", chainId: 5 },
-    { id: "polygon", name: "Polygon Mainnet", chainId: 137 },
-    { id: "mumbai", name: "Polygon Mumbai", chainId: 80001 },
+    { id: "mainnet", name: "OMEGA Mainnet", chainId: 1 ,rpcUrl: "http://omegasuite.org:8789"},
+    { id: "testnet", name: "OMEGA Testnet", chainId: 1 ,rpcUrl: ""},
+    { id: "devnet", name: "OMEGA Devnet", chainId: 1 ,rpcUrl: "http://127.0.0.1:18840"},
   ]
 
   const handleDeploy = async () => {
-    if (!currentFile || !currentFile.name.endsWith(".sol")) {
-      setDeploymentResult("Please select a Solidity contract to deploy")
+    if (!currentFile || !currentFile.name.endsWith(".c")) {
+      setDeploymentResult("Please select a contract to deploy")
       return
     }
 
@@ -95,34 +91,12 @@ Gas Used: ${Math.floor(Math.random() * 1000000 + 500000)}`)
           </div>
 
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <WalletIcon className="h-4 w-4" />
+            {/* <WalletIcon className="h-4 w-4" />
             <span>Wallet: Not Connected</span>
             <Button variant="outline" size="sm">
               Connect
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm">Gas Settings</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="gasLimit">Gas Limit</Label>
-              <Input
-                id="gasLimit"
-                value={gasLimit}
-                onChange={(e) => setGasLimit(e.target.value)}
-                placeholder="3000000"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="gasPrice">Gas Price (Gwei)</Label>
-              <Input id="gasPrice" value={gasPrice} onChange={(e) => setGasPrice(e.target.value)} placeholder="20" />
-            </div>
+            </Button> */}
+            <Input type="text" placeholder="Enter your wallet private key" />
           </div>
         </CardContent>
       </Card>
@@ -137,11 +111,11 @@ Gas Used: ${Math.floor(Math.random() * 1000000 + 500000)}`)
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {solidityFiles.length > 0 ? (
+          {cFiles.length > 0 ? (
             <div className="space-y-2">
               <Label>Available Contracts</Label>
               <div className="space-y-1">
-                {solidityFiles.map((file) => (
+                {cFiles.map((file) => (
                   <div
                     key={file.id}
                     className={`flex items-center justify-between rounded-md border p-2 text-sm ${
