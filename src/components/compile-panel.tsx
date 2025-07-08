@@ -21,7 +21,7 @@ import {
   FileIcon,
   Copy,
 } from "lucide-react";
-import type { FileType } from "@/lib/types";
+import type { CompiledResult, FileType } from "@/lib/types";
 import { compileWithWasm, isWasmReady } from "@/lib/wasm-compiler";
 import { getFileFromMemFS } from "@/lib/db";
 import { toast } from "sonner";
@@ -30,13 +30,15 @@ import { Asm } from "@/lib/asm";
 
 interface CompilePanelProps {
   files: FileType[];
-  // setFiles: (files: FileType[]) => void;
+  compiledResultMap: Map<string, CompiledResult>;
+  setCompiledResultMap: (map: Map<string, CompiledResult>) => void;
 }
 
 export default function CompilePanel({
   files,
-}: // setFiles,
-CompilePanelProps) {
+  compiledResultMap,
+  setCompiledResultMap,
+}: CompilePanelProps) {
   const [selectedFile, setSelectedFile] = useState<string>("");
   const [isCompiling, setIsCompiling] = useState(false);
   const [compilationSuccess, setCompilationSuccess] = useState<boolean | null>(
@@ -44,10 +46,9 @@ CompilePanelProps) {
   );
   const [compilationOutput, setCompilationOutput] = useState<string>("");
 
-  // 新增：缓存编译结果，key为文件名
-  const [compiledMap, setCompiledMap] = useState<
-    Map<string, { bytecode: string; abi: string }>
-  >(new Map());
+  const [bytecodeAvailable, setBytecodeAvailable] = useState<boolean>(false);
+  const [abiAvailable, setAbiAvailable] = useState<boolean>(false);
+  const [compiledData, setCompiledData] = useState<CompiledResult | null>(null);
 
   // 过滤出.c文件
   const cFiles = files.filter((file) => file.name.endsWith(".c"));
@@ -58,6 +59,21 @@ CompilePanelProps) {
       setSelectedFile(cFiles[0].id);
     }
   }, [cFiles, selectedFile]);
+
+  useEffect(() => {
+    const file = cFiles.find((f) => f.id === selectedFile);
+    console.log("compiledResultMap", compiledResultMap)
+    if (file) {
+      const compiledResult = compiledResultMap.get(file.name);
+      if (compiledResult) {
+        setCompiledData(compiledResult)
+      }else{
+        setCompiledData(null)
+      }
+      setBytecodeAvailable(!!compiledResult?.bytecode)
+      setAbiAvailable(!!compiledResult?.abi)
+    }
+  }, [compiledResultMap, selectedFile, cFiles])
 
   // 复制到剪切板
   const handleCopy = async (text: string) => {
@@ -124,23 +140,20 @@ CompilePanelProps) {
       `/workspace/${file.name.split(".")[0]}.abi`
     );
     if (asm.success && abiFile?.content) {
-      setCompiledMap((prev) => {
-        const newMap = new Map(prev);
-        newMap.set(file.name, {
-          bytecode: asm.bytecode,
-          abi: abiFile.content,
-        });
-        return newMap;
+      const compiledResult = compiledResultMap.get(file.name);
+      if (compiledResult) {
+        compiledResultMap.delete(file.name);
+      }
+      const newMap = new Map();
+      newMap.set(file.name, {
+        bytecode: asm.bytecode,
+        abi: abiFile.content,
+        hash: asm.hash,
       });
+      setCompiledResultMap(newMap);
     }
   };
 
-  // 当前选中文件的编译结果
-  const compiledData = compiledMap.get(
-    cFiles.find((f) => f.id === selectedFile)?.name || ""
-  );
-  const isBytecodeAvailable = !!compiledData?.bytecode;
-  const isAbiAvailable = !!compiledData?.abi;
 
   return (
     <div className="flex h-full flex-col p-3 space-y-3">
@@ -308,7 +321,7 @@ CompilePanelProps) {
             <Button
               variant="outline"
               className="cursor-pointer"
-              disabled={!isAbiAvailable}
+              disabled={!abiAvailable}
               onClick={() => handleCopy(compiledData?.abi || "")}
             >
               <Copy className="h-4 w-4" />
@@ -317,7 +330,7 @@ CompilePanelProps) {
             <Button
               variant="outline"
               className="cursor-pointer"
-              disabled={!isBytecodeAvailable}
+              disabled={!bytecodeAvailable}
               onClick={() => handleCopy(compiledData?.bytecode || "")}
             >
               <Copy className="h-4 w-4" />

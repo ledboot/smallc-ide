@@ -4,4 +4,9 @@ export interface FileType {
     content: string
     lastModified: string
   }
-  
+
+export interface CompiledResult {
+  bytecode: string;
+  abi: string;
+  hash: string;
+}

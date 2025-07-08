@@ -1,16 +1,18 @@
 "use client"
 
 import { useRef } from "react"
-import type { FileType } from "@/lib/types"
+import type { CompiledResult, FileType } from "@/lib/types"
 import { saveFile } from "@/lib/db"
 import { Editor as MonacoEditor } from "@monaco-editor/react"
 
 interface EditorProps {
   file: FileType
   updateFile: (content: string) => void
+  compiledResultMap: Map<string, CompiledResult>
+  setCompiledResultMap: (map: Map<string, CompiledResult>) => void
 }
 
-export default function Editor({ file, updateFile }: EditorProps) {
+export default function Editor({ file, updateFile, compiledResultMap, setCompiledResultMap }: EditorProps) {
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   const handleEditorChange = (value: string | undefined) => {
@@ -29,6 +31,12 @@ export default function Editor({ file, updateFile }: EditorProps) {
         content: value,
         lastModified: new Date().toISOString(),
       })
+      // 关键：创建新 Map 并 set
+      if (compiledResultMap.has(file.name)) {
+        const newMap = new Map(compiledResultMap)
+        newMap.delete(file.name)
+        setCompiledResultMap(newMap)
+      }
     }, 1000)
   }
 

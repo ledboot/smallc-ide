@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import FileExplorer from "@/components/file-explorer";
 import Editor from "@/components/editor";
-import type { FileType } from "@/lib/types";
+import type { CompiledResult, FileType } from "@/lib/types";
 import { Loader2 } from "lucide-react";
 import Sidebar, { type SidebarTab } from "@/components/sidebar";
 import DeployPanel from "@/components/deploy-panel";
@@ -23,6 +23,10 @@ export default function SmallcIDE() {
   const [currentFile, setCurrentFile] = useState<FileType | null>(null);
   const [activeSidebarTab, setActiveSidebarTab] = useState<SidebarTab>("files");
   const consoleRef = useRef<ConsolePanelRef>(null);
+  // compile result cache, key is file name
+  const [compiledResultMap, setCompiledResultMap] = useState<
+    Map<string, CompiledResult>
+  >(new Map());
 
   useEffect(() => {
     const initialize = async () => {
@@ -56,6 +60,8 @@ export default function SmallcIDE() {
         return (
           <CompilePanel
             files={files}
+            compiledResultMap={compiledResultMap}
+            setCompiledResultMap={setCompiledResultMap}
           />
         );
       case "deploy":
@@ -102,6 +108,8 @@ export default function SmallcIDE() {
             {currentFile ? (
               <Editor
                 file={currentFile}
+                compiledResultMap={compiledResultMap}
+                setCompiledResultMap={setCompiledResultMap}
                 updateFile={(content) => {
                   const updatedFiles = files.map((f) =>
                     f.id === currentFile.id ? { ...f, content } : f
