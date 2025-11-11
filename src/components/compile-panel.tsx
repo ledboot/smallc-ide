@@ -20,10 +20,12 @@ import {
   InfoIcon,
   FileIcon,
   Copy,
+  Bug,
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import type { CompiledResult, FileType } from "@/lib/types";
 import { compileWithWasm, isWasmReady } from "@/lib/wasm-compiler";
-import { getFileFromMemFS } from "@/lib/db";
+import { getFileFromMemFS, saveFile } from "@/lib/db";
 import { toast } from "sonner";
 
 import { Asm } from "@/lib/asm";
@@ -49,6 +51,7 @@ export default function CompilePanel({
   const [bytecodeAvailable, setBytecodeAvailable] = useState<boolean>(false);
   const [abiAvailable, setAbiAvailable] = useState<boolean>(false);
   const [compiledData, setCompiledData] = useState<CompiledResult | null>(null);
+  const [debugMode, setDebugMode] = useState(false);
 
   // 过滤出.c文件
   const cFiles = files.filter((file) => file.name.endsWith(".c"));
@@ -103,9 +106,13 @@ export default function CompilePanel({
       if (isWasmReady()) {
         // 构建编译参数
         const args = [];
+        // 添加--debug参数（如果启用）
+        if (debugMode) {
+          args.push('-debug');
+        }
         args.push(`/workspace/${file.name}`);
 
-        const output = await compileWithWasm(args.join(" "));
+        const output = await compileWithWasm(args);
         if (output) {
           setCompilationOutput(`Compilation successful for ${file.name}`);
           setCompilationSuccess(true);
@@ -136,6 +143,7 @@ export default function CompilePanel({
       `/workspace/${file.name.split(".")[0]}.asm`
     );
     const asm = Asm.assemble(asmFile.content);
+    console.log("asm", asm);
     const abiFile = await getFileFromMemFS(
       `/workspace/${file.name.split(".")[0]}.abi`
     );
@@ -144,6 +152,10 @@ export default function CompilePanel({
       if (compiledResult) {
         compiledResultMap.delete(file.name);
       }
+      if (debugMode) {
+        await writeDbgFile(file.name, asm.debugInfo);
+      }
+      
       const newMap = new Map();
       newMap.set(file.name, {
         bytecode: asm.bytecode,
@@ -152,6 +164,16 @@ export default function CompilePanel({
       });
       setCompiledResultMap(newMap);
     }
+  };
+
+  const writeDbgFile = async (fileName: string, dbgContent: string) => {
+    const dbgFile: FileType = {
+      id: fileName.split(".")[0] + ".dbg",
+      name: fileName.split(".")[0] + ".dbg",
+      content: dbgContent,
+      lastModified: new Date().toISOString(),
+    };
+    await saveFile(dbgFile);
   };
 
 
@@ -176,11 +198,11 @@ export default function CompilePanel({
         </CardHeader>
         <CardContent className="space-y-3">
           {cFiles.length > 0 ? (
-            <>
-              <div className="space-y-2">
-                <Label htmlFor="fileSelect" className="text-xs">
-                  Select C File
-                </Label>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="fileSelect" className="text-xs">
+                    Select C File
+                  </Label>
                 <Select value={selectedFile} onValueChange={setSelectedFile}>
                   <SelectTrigger className="h-8">
                     <SelectValue placeholder="Choose..." />
@@ -197,22 +219,19 @@ export default function CompilePanel({
                   </SelectContent>
                 </Select>
               </div>
-
-              {/* {selectedFile && (
-                <div className="space-y-2">
-                  <Label htmlFor="outputName" className="text-xs">
-                    Output Name
-                  </Label>
-                  <Input
-                    id="outputName"
-                    value={outputName}
-                    onChange={(e) => setOutputName(e.target.value)}
-                    placeholder="executable"
-                    className="h-8"
-                  />
-                </div>
-              )} */}
-            </>
+              
+              <div className="flex items-center space-x-2 pt-2">
+                <Switch 
+                  id="debug-mode" 
+                  checked={debugMode}
+                  onCheckedChange={setDebugMode}
+                />
+                <Label htmlFor="debug-mode" className="flex items-center gap-2 text-xs cursor-pointer">
+                  <Bug className="h-3.5 w-3.5" />
+                  Debug Mode
+                </Label>
+              </div>
+            </div>
           ) : (
             <Alert>
               <InfoIcon className="h-4 w-4" />

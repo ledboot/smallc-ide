@@ -31,7 +31,7 @@ interface AssemblyResult {
   bytecode: string;
   hash: string;
   objectCode: string;
-  debugInfo: DebugInfo[];
+  debugInfo: string;
   success: boolean;
   error?: string;
 }
@@ -168,7 +168,7 @@ export class Asm {
         bytecode: bytecode,
         hash: hash,
         objectCode: cleanObjectCode,
-        debugInfo: debug,
+        debugInfo: JSON.stringify(debug),
         success: true
       };
 
@@ -177,7 +177,7 @@ export class Asm {
         bytecode: "",
         hash: "",
         objectCode: "",
-        debugInfo: [],
+        debugInfo: "",
         success: false,
         error: error instanceof Error ? error.message : String(error)
       };

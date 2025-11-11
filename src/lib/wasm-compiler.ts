@@ -141,7 +141,7 @@ export const deleteFileFromMemFS = (filename: string): void => {
   }
 };
 
-export const compileWithWasm = (filename: string): Promise<string> => {
+export const compileWithWasm = (args: string[]): Promise<string> => {
   return new Promise((resolve, reject) => {
     if (!wasmModule || !isModuleReady) {
       reject(new Error("WebAssembly module not initialized"));
@@ -153,7 +153,6 @@ export const compileWithWasm = (filename: string): Promise<string> => {
       // wasmModule.FS.chdir("/workspace");
 
       // Prepare compilation arguments
-      const args = [filename];
 
       // Capture output
       let output = "";
