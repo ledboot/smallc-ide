@@ -21,6 +21,15 @@ export const CHAIN_INFO: { [key in ChainType]: ChainInfo } = {
     endpoints: ['http://omegasuite.org:7789'],
     icon: './images/artifacts/bitcoin-mainnet.svg',
     unit: 'ZENT',
+    rpcUser: '',
+    rpcPassword: '',
     networkType: NetworkType.TESTNET,
   },
 };
+
+export enum DebugCallType {
+  attach = "attach",
+  detach = "detach",
+  clearbreakpoint = "clearbreakpoint",
+  breakpoint = "breakpoint",
+}

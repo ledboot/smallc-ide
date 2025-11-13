@@ -37,6 +37,7 @@ import { toast } from "sonner";
 import { MsgT } from "@/utils/msgTools";
 import { rpcClient } from "@/lib/api";
 import { bytesToHex2 } from "@/utils/index";
+import { TinDef, ToutDef } from "@/utils/defs";
 
 interface DeployPanelProps {
   files: FileType[];
@@ -50,8 +51,8 @@ export default function DeployPanel({
   const { chainType } = useRootStore().settings;
   const [isDeploying, setIsDeploying] = useState(false);
   const [deploymentResult, setDeploymentResult] = useState<string | null>(null);
-  const [privateKey, setPrivateKey] = useState<string>("");
-  const [utxo, setUtxo] = useState<string>("");
+  const [privateKey, setPrivateKey] = useState("");
+  const [utxo, setUtxo] = useState("");
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
 
   const cFiles = files.filter((file) => file.name.endsWith(".c"));
@@ -102,40 +103,48 @@ export default function DeployPanel({
     const msg = new MsgT();
     msg.version = 0x11;
     msg.txDef = [];
+    const tinDef = new TinDef();
     if (utxo) {
-      msg.tIn = [
-        {
-          previousOutPoint: {
-            hash,
-            index: parseInt(index),
-          },
-          signatureIndex: 0,
-          sequence: 0xffffffff,
-        },
-      ];
-    } else {
-      msg.tIn = [];
-    }
-    msg.tOut = [
-      {
-        tokenType: 0,
-        value: 0,
-        pkScript: script,
-      },
-    ];
+      tinDef.previousOutPoint = {
+        hash,
+        index: parseInt(index),
+      };
+      tinDef.signatureIndex = 0;
+      tinDef.sequence = 0xffffffff;
+    } 
+    msg.tIn.push(tinDef);
+
+    const toutDef = new ToutDef();
+    toutDef.tokenType = 0n;
+    toutDef.value = 0n;
+    toutDef.pkScript = script;
+    msg.tOut.push(toutDef);
     msg.lockTime=0;
     msg.signatureScripts=[];
     const rawTx = msg.encode(0);
     const rawTxHex = bytesToHex2(rawTx);
 
     // signrawtransaction
-    const signedTx = await rpcClient.getClient(chainType).signRawTransaction(rawTxHex, [], [privateKey], "ALL");
-
-    console.log("signedTx", signedTx);
+    const signedTx = await rpcClient.getClient(chainType).signRawTransaction(rawTxHex, [], [privateKey],false);
+    if (!signedTx){
+      toast.error("Sign raw transaction failed");
+      setIsDeploying(false);
+      return;
+    }
+    console.log("sign raw transaction result", signedTx);
+    if (!signedTx.hex){
+      toast.error("Sign raw transaction failed");
+      setIsDeploying(false);
+      return;
+    }
 
     // sendrawtransaction
-    const txHash = await rpcClient.getClient(chainType).sendRawTransaction(signedTx);
-
+    const txHash = await rpcClient.getClient(chainType).sendRawTransaction(signedTx.hex);
+    if (!txHash){
+      toast.error("Send raw transaction failed");
+      setIsDeploying(false);
+      return;
+    }
     console.log("txHash", txHash);
     setIsDeploying(false);
 
@@ -180,13 +189,14 @@ export default function DeployPanel({
             </Select>
           </div>
 
-          <div className="flex-col items-center space-y-2 text-sm text-muted-foreground">
+          <div className="flex-col items-center space-y-2 text-sm">
             <Input
               type="text"
               value={privateKey}
+              onChange={(e) => setPrivateKey(e.target.value)}
               placeholder="Enter your wallet private key"
             />
-            <Input type="text" value={utxo} placeholder="Enter UTXO" />
+            <Input type="text" value={utxo} onChange={(e) => setUtxo(e.target.value)} placeholder="Enter UTXO" />
           </div>
         </CardContent>
       </Card>

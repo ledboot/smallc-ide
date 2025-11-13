@@ -67,7 +67,7 @@ export default function SmallcIDE() {
       case "deploy":
         return <DeployPanel files={files} compiledResultMap={compiledResultMap} />;
       case "debug":
-        return <DebugPanel files={files} currentFile={currentFile} />;
+        return <DebugPanel files={files} setCurrentFile={setCurrentFile} />;
       case "settings":
         return <SettingsPanel />;
       default:

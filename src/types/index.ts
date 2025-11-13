@@ -8,4 +8,6 @@ export type ChainInfo = {
   icon: string;
   unit: string;
   networkType: NetworkType;
+  rpcUser: string;
+  rpcPassword: string;
 };
