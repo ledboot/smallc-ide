@@ -161,6 +161,7 @@ export const compileWithWasm = (args: string[]): Promise<string> => {
 
       wasmModule.print = (text: unknown) => {
         output += text + "\n";
+        console.log("compileWithWasm print->",text);
       };
 
       wasmModule.printErr = (text: unknown) => {

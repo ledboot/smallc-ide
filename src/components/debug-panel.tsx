@@ -11,6 +11,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -80,6 +81,8 @@ export default function DebugPanel({ files, setCurrentFile }: DebugPanelProps) {
   // Filter C files for debugging
   const cFiles = files.filter((file) => file.name.endsWith(".c"));
   const selectedFile = files.find((file) => file.id === selectedFileId) || null;
+
+  const [transactionHash, setTransactionHash] = useState<string>("");
 
   // Auto-select first .c file if none selected and files are available
   useEffect(() => {
@@ -275,6 +278,15 @@ export default function DebugPanel({ files, setCurrentFile }: DebugPanelProps) {
               ))}
             </SelectContent>
           </Select>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="debug-addr">Transaction Hash</Label>
+          <Input
+            id="debug-addr"
+            placeholder="Enter transaction hash"
+            value={transactionHash}
+            onChange={(e) => setTransactionHash(e.target.value)}
+          />
         </div>
       </div>
 

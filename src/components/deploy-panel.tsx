@@ -27,6 +27,8 @@ import {
   InfoIcon,
   ExternalLinkIcon,
   FileIcon,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import type { FileType } from "@/lib/types";
 import { ChainType, CHAIN_INFO } from "@/constants";
@@ -38,6 +40,10 @@ import { MsgT } from "@/utils/msgTools";
 import { rpcClient } from "@/lib/api";
 import { bytesToHex2 } from "@/utils/index";
 import { TinDef, ToutDef } from "@/utils/defs";
+import {
+  DeployedContractCardProps,
+  DeployedContractCard,
+} from "./deployeContractCard";
 
 interface DeployPanelProps {
   files: FileType[];
@@ -57,14 +63,53 @@ export default function DeployPanel({
 
   const cFiles = files.filter((file) => file.name.endsWith(".c"));
   const selectedFile = files.find((file) => file.id === selectedFileId) || null;
-  const selectedNetwork = CHAIN_INFO[chainType];
+
+  // const [deployedContracts, setDeployedContracts] = useState<
+  //   Map<string, DeployedContractCardProps[]>
+  // >(new Map());
+
+  const [deployedContractsMap, setDeployedContractsMap] = useState<Map<string, DeployedContractCardProps[]>>(() => {
+    return new Map([
+      [
+        "storage.c",
+        [{
+          contractAddress: "0x1234567890123456789012345678901234567890",
+          abi: JSON.stringify({
+            "void store(int num)": "xb792d88c",
+            "void retrieve()": "x60352ae4",
+          }),
+          contractName: "storage.c",
+        }],
+      ],
+    ]);
+  });
+
+  const [currentDeployedContract, setCurrentDeployedContract] = useState<
+    DeployedContractCardProps[] | null
+  >(null);
+
 
   // Auto-select first .c file if none selected and files are available
   useEffect(() => {
-    if (cFiles.length > 0 && !selectedFileId) {
-      setSelectedFileId(cFiles[0].id);
+    const deployedContracts = deployedContractsMap.get(selectedFileId || "")
+    console.log("deployedContracts", deployedContracts);
+    if (deployedContracts) {
+      setCurrentDeployedContract(deployedContracts);
     }
-  }, [cFiles, selectedFileId]);
+
+    // setCurrentDeployedContract(deployedContracts.get(cFiles[0].name) ?? null);
+    // setCurrentDeployedContract(mockContracts.get(cFiles[0].name) ?? null);
+  }, [selectedFileId]);
+
+  const handleContractSelect = (fileId: string) => {
+    console.log("fileId", fileId);
+    setSelectedFileId(fileId);
+  };
+
+
+
+  const [isDeployedContractsExpanded, setIsDeployedContractsExpanded] =
+    useState(true);
 
   const handleDeploy = async () => {
     if (!selectedFile || !selectedFile.name.endsWith(".c")) {
@@ -87,18 +132,17 @@ export default function DeployPanel({
       return;
     }
 
-    const compiledResult = compiledResultMap.get(selectedFile.name);
-    if (!compiledResult) {
+    const result = compiledResultMap.get(selectedFile.name);
+    if (!result) {
       toast.error("Please compile the contract first");
       return;
     }
-    console.log("compiledResult", compiledResult);
+    console.log("compiledResult", result);
 
     setIsDeploying(true);
     setDeploymentResult(null);
 
-
-    const script = "88" + compiledResult.hash + "00000000" + compiledResult.bytecode;
+    const script = "88" + result.hash + "00000000" + result.bytecode;
 
     const msg = new MsgT();
     msg.version = 0x11;
@@ -111,7 +155,7 @@ export default function DeployPanel({
       };
       tinDef.signatureIndex = 0;
       tinDef.sequence = 0xffffffff;
-    } 
+    }
     msg.tIn.push(tinDef);
 
     const toutDef = new ToutDef();
@@ -119,34 +163,51 @@ export default function DeployPanel({
     toutDef.value = 0n;
     toutDef.pkScript = script;
     msg.tOut.push(toutDef);
-    msg.lockTime=0;
-    msg.signatureScripts=[];
+    msg.lockTime = 0;
+    msg.signatureScripts = [];
     const rawTx = msg.encode(0);
     const rawTxHex = bytesToHex2(rawTx);
 
     // signrawtransaction
-    const signedTx = await rpcClient.getClient(chainType).signRawTransaction(rawTxHex, [], [privateKey],false);
-    if (!signedTx){
+    const signedTx = await rpcClient
+      .getClient(chainType)
+      .signRawTransaction(rawTxHex, [], [privateKey], false);
+    if (!signedTx) {
       toast.error("Sign raw transaction failed");
       setIsDeploying(false);
       return;
     }
     console.log("sign raw transaction result", signedTx);
-    if (!signedTx.hex){
+    if (!signedTx.hex) {
       toast.error("Sign raw transaction failed");
       setIsDeploying(false);
       return;
     }
 
     // sendrawtransaction
-    const txHash = await rpcClient.getClient(chainType).sendRawTransaction(signedTx.hex);
-    if (!txHash){
+    const txHash = await rpcClient
+      .getClient(chainType)
+      .sendRawTransaction(signedTx.hex);
+    if (!txHash) {
       toast.error("Send raw transaction failed");
       setIsDeploying(false);
       return;
     }
     console.log("txHash", txHash);
     setIsDeploying(false);
+
+    // After successful deployment
+    const newContract = {
+      contractAddress: result.hash, // or the actual contract address
+      abi: result.abi,
+      contractName: selectedFile.name,
+    };
+    setDeployedContractsMap((prev) => {
+      const newMap = new Map(prev);
+      const contracts = newMap.get(selectedFile.name) || [];
+      newMap.set(selectedFile.name, [...contracts, newContract]);
+      return newMap;
+    });
 
     toast.success("Transaction sent successfully");
   };
@@ -196,7 +257,12 @@ export default function DeployPanel({
               onChange={(e) => setPrivateKey(e.target.value)}
               placeholder="Enter your wallet private key"
             />
-            <Input type="text" value={utxo} onChange={(e) => setUtxo(e.target.value)} placeholder="Enter UTXO" />
+            <Input
+              type="text"
+              value={utxo}
+              onChange={(e) => setUtxo(e.target.value)}
+              placeholder="Enter UTXO"
+            />
           </div>
         </CardContent>
       </Card>
@@ -215,8 +281,8 @@ export default function DeployPanel({
             <div className="space-y-2">
               <Label>Available Contracts</Label>
               <Select
-                value={selectedFileId || ""}
-                onValueChange={setSelectedFileId}
+                value={selectedFileId || cFiles[0].id}
+                onValueChange={handleContractSelect}
               >
                 <SelectTrigger className="h-8">
                   <SelectValue placeholder="Select a file..." />
@@ -262,6 +328,38 @@ export default function DeployPanel({
         </CardContent>
       </Card>
 
+      <Card className="mt-6">
+        <CardHeader
+          className="pb-2 cursor-pointer hover:bg-muted/50 rounded-t-lg transition-colors"
+          onClick={() =>
+            setIsDeployedContractsExpanded(!isDeployedContractsExpanded)
+          }
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <CardTitle>Deployed Contracts</CardTitle>
+            </div>
+            {isDeployedContractsExpanded ? (
+              <ChevronUp className="h-4 w-4 text-muted-foreground" />
+            ) : (
+              <ChevronDown className="h-4 w-4 text-muted-foreground" />
+            )}
+          </div>
+        </CardHeader>
+        {isDeployedContractsExpanded && (
+          <CardContent className="px-2">
+            {currentDeployedContract &&
+              Array.from(currentDeployedContract).map((contract, index) => (
+                <DeployedContractCard
+                  contractAddress={contract.contractAddress}
+                  abi={contract.abi}
+                  contractName={contract.contractName}
+                  key={`${contract.contractAddress}-${index}`}
+                />
+              ))}
+          </CardContent>
+        )}
+      </Card>
       {deploymentResult && (
         <Card>
           <CardHeader className="pb-3">
