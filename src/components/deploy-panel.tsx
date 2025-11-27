@@ -68,18 +68,22 @@ export default function DeployPanel({
   //   Map<string, DeployedContractCardProps[]>
   // >(new Map());
 
-  const [deployedContractsMap, setDeployedContractsMap] = useState<Map<string, DeployedContractCardProps[]>>(() => {
+  const [deployedContractsMap, setDeployedContractsMap] = useState<
+    Map<string, DeployedContractCardProps[]>
+  >(() => {
     return new Map([
       [
         "storage.c",
-        [{
-          contractAddress: "0x1234567890123456789012345678901234567890",
-          abi: JSON.stringify({
-            "void store(int num)": "xb792d88c",
-            "void retrieve()": "x60352ae4",
-          }),
-          contractName: "storage.c",
-        }],
+        [
+          {
+            contractAddress: "0x1234567890123456789012345678901234567890",
+            abi: JSON.stringify({
+              "void store(int num)": "xb792d88c",
+              "void retrieve()": "x60352ae4",
+            }),
+            contractName: "storage.c",
+          },
+        ],
       ],
     ]);
   });
@@ -88,10 +92,9 @@ export default function DeployPanel({
     DeployedContractCardProps[] | null
   >(null);
 
-
   // Auto-select first .c file if none selected and files are available
   useEffect(() => {
-    const deployedContracts = deployedContractsMap.get(selectedFileId || "")
+    const deployedContracts = deployedContractsMap.get(selectedFileId || "");
     console.log("deployedContracts", deployedContracts);
     if (deployedContracts) {
       setCurrentDeployedContract(deployedContracts);
@@ -105,8 +108,6 @@ export default function DeployPanel({
     console.log("fileId", fileId);
     setSelectedFileId(fileId);
   };
-
-
 
   const [isDeployedContractsExpanded, setIsDeployedContractsExpanded] =
     useState(true);
@@ -161,6 +162,8 @@ export default function DeployPanel({
     const toutDef = new ToutDef();
     toutDef.tokenType = 0n;
     toutDef.value = 0n;
+    console.log("script size", script.length * 1000);
+
     toutDef.pkScript = script;
     msg.tOut.push(toutDef);
     msg.lockTime = 0;
@@ -169,11 +172,11 @@ export default function DeployPanel({
     const rawTxHex = bytesToHex2(rawTx);
 
     // signrawtransaction
-    const signedTx = await rpcClient
+    const [signedTx, signErr] = await rpcClient
       .getClient(chainType)
       .signRawTransaction(rawTxHex, [], [privateKey], false);
-    if (!signedTx) {
-      toast.error("Sign raw transaction failed");
+    if (signErr) {
+      toast.error("Sign raw transaction failed:", { description: signErr });
       setIsDeploying(false);
       return;
     }
@@ -185,11 +188,11 @@ export default function DeployPanel({
     }
 
     // sendrawtransaction
-    const txHash = await rpcClient
+    const [txHash, sendErr] = await rpcClient
       .getClient(chainType)
       .sendRawTransaction(signedTx.hex);
-    if (!txHash) {
-      toast.error("Send raw transaction failed");
+    if (sendErr) {
+      toast.error("Send raw transaction failed:", { description: sendErr });
       setIsDeploying(false);
       return;
     }

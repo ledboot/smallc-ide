@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Copy } from "lucide-react";
 import { toast } from "sonner";
-import { bytesToHex2,hashReverse } from "@/utils/index";
+import { bytesToHex2, hashReverse } from "@/utils/index";
 import { MsgT } from "@/utils/msgTools";
 import { rpcClient } from "@/lib/api";
 import { ToutDef } from "@/utils/defs";
@@ -30,9 +30,9 @@ export const DeployedContractCard = ({
   const { chainType } = useRootStore().settings;
 
   const handleInputChange = (methodSignature: string, value: string) => {
-    setInputValues(prev => ({
+    setInputValues((prev) => ({
       ...prev,
-      [methodSignature]: value
+      [methodSignature]: value,
     }));
   };
 
@@ -45,8 +45,8 @@ export const DeployedContractCard = ({
         .filter(([key]) => key !== "address" && key !== "")
         .map(([signature, methodHash]) => {
           // Extract method name from signature (everything before the first parenthesis)
-          const name = signature.split('(')[0].trim().split(' ')[1];
-          const parameters = signature.split('(')[1].split(')')[0].split(',');
+          const name = signature.split("(")[0].trim().split(" ")[1];
+          const parameters = signature.split("(")[1].split(")")[0].split(",");
           return {
             name,
             signature,
@@ -71,14 +71,18 @@ export const DeployedContractCard = ({
   const handleMethodClick = (method: ContractMethod) => async () => {
     const inputParams = inputValues[method.signature];
     const defParams = method.parameters;
-    if (defParams.length !== inputParams.split(',').length) {
+    if (defParams.length !== inputParams.split(",").length) {
       toast.error("Parameter count mismatch");
       return;
     }
-    console.log(`Calling ${method.signature} with params:`, inputParams,"defParams",defParams);
+    console.log(
+      `Calling ${method.signature} with params:`,
+      inputParams,
+      "defParams",
+      defParams
+    );
     // TODO: Implement actual contract method call
-    const params = inputParams.split(',');
-
+    const params = inputParams.split(",");
 
     const toAddress = contractAddress;
     const ops: Record<string, string> = {
@@ -118,9 +122,13 @@ export const DeployedContractCard = ({
     msg.signatureScripts = [];
     const rawTx = msg.encode(0);
     const rawTxHex = bytesToHex2(rawTx);
-    const result = await rpcClient
+    const [result, err] = await rpcClient
       .getClient(chainType)
       .contractCall(toAddress, rawTxHex);
+    if (err) {
+      toast.error("Contract call failed", { description: err });
+      return;
+    }
     console.log("result", result);
   };
 
@@ -136,11 +144,16 @@ export const DeployedContractCard = ({
             <span className="text-sm font-mono">{contractName}</span>
           </div>
           <div className="flex items-center space-x-2">
-            <div className="text-xs font-mono">{contractAddress.slice(0, 7)}...{contractAddress.slice(-4)}</div>
-            <Copy className="w-3 h-3 font-mono hover:text-blue-500 hover:cursor-pointer" onClick={() => {
-              navigator.clipboard.writeText(contractAddress);
-              toast.success("Address copied to clipboard");
-            }}/>
+            <div className="text-xs font-mono">
+              {contractAddress.slice(0, 7)}...{contractAddress.slice(-4)}
+            </div>
+            <Copy
+              className="w-3 h-3 font-mono hover:text-blue-500 hover:cursor-pointer"
+              onClick={() => {
+                navigator.clipboard.writeText(contractAddress);
+                toast.success("Address copied to clipboard");
+              }}
+            />
           </div>
         </div>
       </CardHeader>
@@ -157,15 +170,19 @@ export const DeployedContractCard = ({
                   >
                     {method.name}
                   </button>
-                  
+
                   {methodHasParams && (
                     <>
                       <input
                         type="text"
-                        value={inputValues[method.signature] || ''}
-                        onChange={(e) => handleInputChange(method.signature, e.target.value)}
+                        value={inputValues[method.signature] || ""}
+                        onChange={(e) =>
+                          handleInputChange(method.signature, e.target.value)
+                        }
                         className="flex-1 px-2 py-1.5 text-xs border border-gray-600 rounded text-black placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                        placeholder={method.signature.match(/\(([^)]+)\)/)?.[1] || 'value'}
+                        placeholder={
+                          method.signature.match(/\(([^)]+)\)/)?.[1] || "value"
+                        }
                       />
                     </>
                   )}

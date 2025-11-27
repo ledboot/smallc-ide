@@ -16,11 +16,13 @@ import SettingsPanel from "@/components/settings-panel";
 import CompilePanel from "@/components/compile-panel";
 import { initWasmCompiler } from "@/lib/wasm-compiler";
 import ConsolePanel, { ConsolePanelRef } from "@/components/console-panel";
+import EditorTabs from "@/components/editor-tabs";
 
 export default function SmallcIDE() {
   const [isLoading, setIsLoading] = useState(true);
   const [files, setFiles] = useState<FileType[]>([]);
   const [currentFile, setCurrentFile] = useState<FileType | null>(null);
+  const [openTabs, setOpenTabs] = useState<FileType[]>([]);
   const [activeSidebarTab, setActiveSidebarTab] = useState<SidebarTab>("files");
   const consoleRef = useRef<ConsolePanelRef>(null);
   // compile result cache, key is file name
@@ -37,6 +39,50 @@ export default function SmallcIDE() {
     initialize();
   }, []);
 
+  // Tab management functions
+  const handleOpenFile = (file: FileType | null) => {
+    if (!file) {
+      setCurrentFile(null);
+      return;
+    }
+
+    // Check if file is already open in a tab
+    const existingTab = openTabs.find((tab) => tab.id === file.id);
+
+    if (existingTab) {
+      // Switch to existing tab
+      setCurrentFile(file);
+    } else {
+      // Open in new tab
+      setOpenTabs((prev) => [...prev, file]);
+      setCurrentFile(file);
+    }
+  };
+
+  const handleCloseTab = (fileId: string) => {
+    const tabIndex = openTabs.findIndex((tab) => tab.id === fileId);
+    if (tabIndex === -1) return;
+
+    const newTabs = openTabs.filter((tab) => tab.id !== fileId);
+    setOpenTabs(newTabs);
+
+    // If closing the active tab, switch to another tab
+    if (currentFile?.id === fileId) {
+      if (newTabs.length > 0) {
+        // Switch to the previous tab, or the first tab if closing the first one
+        const newActiveIndex = tabIndex > 0 ? tabIndex - 1 : 0;
+        setCurrentFile(newTabs[newActiveIndex]);
+      } else {
+        // No tabs left
+        setCurrentFile(null);
+      }
+    }
+  };
+
+  const handleSwitchTab = (file: FileType) => {
+    setCurrentFile(file);
+  };
+
   const renderSidebarContent = () => {
     switch (activeSidebarTab) {
       case "files":
@@ -45,29 +91,30 @@ export default function SmallcIDE() {
             files={files}
             setFiles={setFiles}
             currentFile={currentFile}
-            setCurrentFile={setCurrentFile}
+            setCurrentFile={handleOpenFile}
           />
         );
       case "search":
-        return <SearchPanel files={files} onFileSelect={setCurrentFile} />;
-      case "git":
-        return (
-          <div className="p-4 text-center text-muted-foreground">
-            <p>Git integration coming soon</p>
-          </div>
-        );
+        return <SearchPanel files={files} onFileSelect={handleOpenFile} />;
       case "compile":
         return (
           <CompilePanel
             files={files}
             compiledResultMap={compiledResultMap}
             setCompiledResultMap={setCompiledResultMap}
+            refreshFiles={async () => {
+              const { getAllFiles } = await import("@/lib/db");
+              const loadedFiles = await getAllFiles();
+              setFiles(loadedFiles);
+            }}
           />
         );
       case "deploy":
-        return <DeployPanel files={files} compiledResultMap={compiledResultMap} />;
+        return (
+          <DeployPanel files={files} compiledResultMap={compiledResultMap} />
+        );
       case "debug":
-        return <DebugPanel files={files} setCurrentFile={setCurrentFile} />;
+        return <DebugPanel files={files} setCurrentFile={handleOpenFile} />;
       case "settings":
         return <SettingsPanel />;
       default:
@@ -104,25 +151,40 @@ export default function SmallcIDE() {
           {renderSidebarContent()}
         </aside>
         <div className="flex flex-1 flex-col">
-          <div className="flex-1 overflow-auto">
+          <div className="flex-1 overflow-auto flex flex-col">
+            <EditorTabs
+              openTabs={openTabs}
+              currentFile={currentFile}
+              onTabClick={handleSwitchTab}
+              onTabClose={handleCloseTab}
+            />
             {currentFile ? (
-              <Editor
-                file={currentFile}
-                compiledResultMap={compiledResultMap}
-                setCompiledResultMap={setCompiledResultMap}
-                updateFile={(content) => {
-                  const updatedFiles = files.map((f) =>
-                    f.id === currentFile.id ? { ...f, content } : f
-                  );
-                  setFiles(updatedFiles);
-                  setCurrentFile({ ...currentFile, content });
-                }}
-              />
+              <div className="flex-1">
+                <Editor
+                  file={currentFile}
+                  compiledResultMap={compiledResultMap}
+                  setCompiledResultMap={setCompiledResultMap}
+                  updateFile={(content) => {
+                    const updatedFiles = files.map((f) =>
+                      f.id === currentFile.id ? { ...f, content } : f
+                    );
+                    setFiles(updatedFiles);
+                    setCurrentFile({ ...currentFile, content });
+
+                    // Update the file in openTabs as well
+                    setOpenTabs((prev) =>
+                      prev.map((tab) =>
+                        tab.id === currentFile.id ? { ...tab, content } : tab
+                      )
+                    );
+                  }}
+                />
+              </div>
             ) : (
               <div className="flex h-full items-center justify-center text-muted-foreground">
                 <div className="text-center">
                   <h3 className="text-lg font-medium mb-2">
-                    Welcome to Remix IDE Web
+                    Welcome to SmallC IDE Web
                   </h3>
                   <p>Select or create a file to start coding</p>
                 </div>

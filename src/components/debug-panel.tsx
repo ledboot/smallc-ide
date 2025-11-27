@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { FileIcon} from "lucide-react";
+import { FileIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -77,6 +77,7 @@ export default function DebugPanel({ files, setCurrentFile }: DebugPanelProps) {
     breakpoints: { line: number; file: string }[];
   } | null>(null);
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
+  const [variables, setVariables] = useState<Variable[]>([]);
 
   // Filter C files for debugging
   const cFiles = files.filter((file) => file.name.endsWith(".c"));
@@ -111,9 +112,11 @@ export default function DebugPanel({ files, setCurrentFile }: DebugPanelProps) {
         );
 
         // Use the breakpoints in the debug call
-        const response = await rpcClient
+        const [response, err] = await rpcClient
           .getClient(chainType)
-          .debugCall("breakpoints");
+          .debugCall(DebugCallType.breakpoints);
+
+        if (err) throw new Error(err);
 
         setDebugSession({
           sessionId: response.sessionId,
@@ -143,7 +146,10 @@ export default function DebugPanel({ files, setCurrentFile }: DebugPanelProps) {
 
     try {
       // Start the debugger
-      const debugInfo = await rpcClient.getClient(chainType).debugCall("start");
+      const [debugInfo, err] = await rpcClient
+        .getClient(chainType)
+        .debugCall(DebugCallType.start);
+      if (err) throw new Error(err);
 
       // Update UI with initial debug state
       if (debugInfo) {
@@ -160,7 +166,10 @@ export default function DebugPanel({ files, setCurrentFile }: DebugPanelProps) {
   const handleStopDebugging = async () => {
     try {
       if (debugSession) {
-        await rpcClient.getClient(chainType).debugCall("stop");
+        const [, err] = await rpcClient
+          .getClient(chainType)
+          .debugCall(DebugCallType.stop);
+        if (err) throw new Error(err);
       }
     } catch (error) {
       console.error("Error stopping debug session:", error);
@@ -177,7 +186,11 @@ export default function DebugPanel({ files, setCurrentFile }: DebugPanelProps) {
 
     try {
       setIsPaused(false);
-      const result = await rpcClient.getClient(chainType).debugCall("continue");
+      setIsPaused(false);
+      const [result, err] = await rpcClient
+        .getClient(chainType)
+        .debugCall(DebugCallType.continue);
+      if (err) throw new Error(err);
       updateDebugState(result);
     } catch (error) {
       console.error("Continue failed:", error);
@@ -190,7 +203,10 @@ export default function DebugPanel({ files, setCurrentFile }: DebugPanelProps) {
     if (!debugSession) return;
 
     try {
-      const result = await rpcClient.getClient(chainType).debugCall("pause");
+      const [result, err] = await rpcClient
+        .getClient(chainType)
+        .debugCall(DebugCallType.pause);
+      if (err) throw new Error(err);
       updateDebugState(result);
     } catch (error) {
       console.error("Pause failed:", error);
@@ -202,7 +218,10 @@ export default function DebugPanel({ files, setCurrentFile }: DebugPanelProps) {
     if (!debugSession) return;
 
     try {
-      const result = await rpcClient.getClient(chainType).debugCall("stepOver");
+      const [result, err] = await rpcClient
+        .getClient(chainType)
+        .debugCall(DebugCallType.stepOver);
+      if (err) throw new Error(err);
       updateDebugState(result);
     } catch (error) {
       console.error("Step over failed:", error);
@@ -214,7 +233,10 @@ export default function DebugPanel({ files, setCurrentFile }: DebugPanelProps) {
     if (!debugSession) return;
 
     try {
-      const result = await rpcClient.getClient(chainType).debugCall("stepInto");
+      const [result, err] = await rpcClient
+        .getClient(chainType)
+        .debugCall(DebugCallType.stepInto);
+      if (err) throw new Error(err);
       updateDebugState(result);
     } catch (error) {
       console.error("Step into failed:", error);
@@ -226,7 +248,10 @@ export default function DebugPanel({ files, setCurrentFile }: DebugPanelProps) {
     if (!debugSession) return;
 
     try {
-      const result = await rpcClient.getClient(chainType).debugCall("stepOut");
+      const [result, err] = await rpcClient
+        .getClient(chainType)
+        .debugCall(DebugCallType.stepOut);
+      if (err) throw new Error(err);
       updateDebugState(result);
     } catch (error) {
       console.error("Step out failed:", error);

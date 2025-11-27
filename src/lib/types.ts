@@ -4,6 +4,9 @@ export interface FileType {
   content: string
   lastModified: string
   breakpoints?: Breakpoint[]
+  isDirectory?: boolean
+  path?: string
+  children?: FileType[]
 }
 
 export interface Breakpoint {

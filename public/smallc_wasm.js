@@ -4336,23 +4336,6 @@ async function createWasm() {
   var __abort_js = () =>
       abort('native code called abort()');
 
-  
-  
-  var __emscripten_fs_load_embedded_files = (ptr) => {
-      do {
-        var name_addr = HEAPU32[((ptr)>>2)];
-        ptr += 4;
-        var len = HEAPU32[((ptr)>>2)];
-        ptr += 4;
-        var content = HEAPU32[((ptr)>>2)];
-        ptr += 4;
-        var name = UTF8ToString(name_addr)
-        FS.createPath('/', PATH.dirname(name), true, true);
-        // canOwn this data in the filesystem, it is a slice of wasm memory that will never change
-        FS.createDataFile(name, null, HEAP8.subarray(content, content + len), true, true, true);
-      } while (HEAPU32[((ptr)>>2)]);
-    };
-
   var stringToUTF8 = (str, outPtr, maxBytesToWrite) => {
       assert(typeof maxBytesToWrite == 'number', 'stringToUTF8(str, outPtr, maxBytesToWrite) is missing the third parameter that specifies the length of the output buffer!');
       return stringToUTF8Array(str, HEAPU8, outPtr, maxBytesToWrite);
@@ -4669,17 +4652,6 @@ async function createWasm() {
     };
 
 
-
-  var FS_createPath = (...args) => FS.createPath(...args);
-
-
-
-  var FS_unlink = (...args) => FS.unlink(...args);
-
-  var FS_createLazyFile = (...args) => FS.createLazyFile(...args);
-
-  var FS_createDevice = (...args) => FS.createDevice(...args);
-
   FS.createPreloadedFile = FS_createPreloadedFile;
   FS.staticInit();;
 // End JS library code
@@ -4722,16 +4694,8 @@ if (Module['wasmBinary']) wasmBinary = Module['wasmBinary'];
 }
 
 // Begin runtime exports
-  Module['addRunDependency'] = addRunDependency;
-  Module['removeRunDependency'] = removeRunDependency;
   Module['callMain'] = callMain;
-  Module['FS_createPreloadedFile'] = FS_createPreloadedFile;
-  Module['FS_unlink'] = FS_unlink;
-  Module['FS_createPath'] = FS_createPath;
-  Module['FS_createDevice'] = FS_createDevice;
   Module['FS'] = FS;
-  Module['FS_createDataFile'] = FS_createDataFile;
-  Module['FS_createLazyFile'] = FS_createLazyFile;
   var missingLibrarySymbols = [
   'writeI53ToI64',
   'writeI53ToI64Clamped',
@@ -4905,6 +4869,8 @@ missingLibrarySymbols.forEach(missingLibrarySymbol)
 
   var unexportedSymbols = [
   'run',
+  'addRunDependency',
+  'removeRunDependency',
   'out',
   'err',
   'abort',
@@ -4998,10 +4964,14 @@ missingLibrarySymbols.forEach(missingLibrarySymbol)
   'MONTH_DAYS_LEAP_CUMULATIVE',
   'SYSCALLS',
   'preloadPlugins',
+  'FS_createPreloadedFile',
   'FS_modeStringToFlags',
   'FS_getMode',
   'FS_stdin_getChar_buffer',
   'FS_stdin_getChar',
+  'FS_unlink',
+  'FS_createPath',
+  'FS_createDevice',
   'FS_readFile',
   'FS_root',
   'FS_mounts',
@@ -5106,7 +5076,9 @@ missingLibrarySymbols.forEach(missingLibrarySymbol)
   'FS_findObject',
   'FS_analyzePath',
   'FS_createFile',
+  'FS_createDataFile',
   'FS_forceLoadFile',
+  'FS_createLazyFile',
   'FS_absolutePath',
   'FS_createFolder',
   'FS_createLink',
@@ -5173,8 +5145,6 @@ var wasmImports = {
   __syscall_unlinkat: ___syscall_unlinkat,
   /** @export */
   _abort_js: __abort_js,
-  /** @export */
-  _emscripten_fs_load_embedded_files: __emscripten_fs_load_embedded_files,
   /** @export */
   _tzset_js: __tzset_js,
   /** @export */

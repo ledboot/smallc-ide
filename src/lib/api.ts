@@ -65,10 +65,16 @@ class RPCClient {
         params,
         id: this.sessionId++,
       });
-      return response.data.result;
-    } catch (error) {
+
+      if (response.data.error) {
+        // Handle JSON-RPC error
+        const errorMessage = response.data.error.message || "Unknown RPC error";
+        return [null, errorMessage];
+      }
+      return [response.data.result, null];
+    } catch (error: any) {
       console.error(`RPC call failed for method ${method}:`, error);
-      throw error;
+      throw new Error(String(error));
     }
   }
 
@@ -96,8 +102,8 @@ class RPCClient {
     return this.rpcCall("sendrawtransaction", [hextx, true, 15]);
   }
 
-  async contractCall(contractAddress: string,params:string){
-    return this.rpcCall("contractcall", [contractAddress,params]);
+  async contractCall(contractAddress: string, params: string) {
+    return this.rpcCall("contractcall", [contractAddress, params]);
   }
 }
 

@@ -24,8 +24,8 @@ import {
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import type { CompiledResult, FileType } from "@/lib/types";
-import { compileWithWasm, isWasmReady } from "@/lib/wasm-compiler";
-import { getFileFromMemFS, saveFile } from "@/lib/db";
+import { compilerService, isWasmReady } from "@/lib/wasm-compiler";
+import { saveFile } from "@/lib/db";
 import { toast } from "sonner";
 
 import { Asm } from "@/lib/asm";
@@ -34,12 +34,14 @@ interface CompilePanelProps {
   files: FileType[];
   compiledResultMap: Map<string, CompiledResult>;
   setCompiledResultMap: (map: Map<string, CompiledResult>) => void;
+  refreshFiles?: () => Promise<void>;
 }
 
 export default function CompilePanel({
   files,
   compiledResultMap,
   setCompiledResultMap,
+  refreshFiles,
 }: CompilePanelProps) {
   const [selectedFile, setSelectedFile] = useState<string>("");
   const [isCompiling, setIsCompiling] = useState(false);
@@ -103,27 +105,30 @@ export default function CompilePanel({
     setCompilationSuccess(null);
 
     try {
-      if (isWasmReady()) {
-        // 构建编译参数
-        const args = [];
-        // 添加--debug参数（如果启用）
-        if (debugMode) {
-          args.push('-debug');
-        }
-        args.push(`/workspace/${file.name}`);
+      // 构建编译参数
+      const args = [];
+      // 添加--debug参数（如果启用）
+      if (debugMode) {
+        args.push('-debug');
+      }
+      args.push(`/workspace/${file.name}`);
 
-        const output = await compileWithWasm(args);
-        if (output) {
-          setCompilationOutput(`Compilation successful for ${file.name}`);
-          setCompilationSuccess(true);
-          // 编译成功后获取bytecode和abi
-          await getBytecodeAndAbi(file);
-        } else {
-          setCompilationOutput(`Compilation failed for ${file.name}`);
-          setCompilationSuccess(false);
+      const result = await compilerService.compile(files, args);
+      
+      if (result.code === 0) {
+        setCompilationOutput(result.output || `Compilation successful for ${file.name}`);
+        setCompilationSuccess(true);
+        
+        // 处理输出文件
+        await processOutputFiles(file, result.outputFiles);
+        
+        // 刷新文件列表
+        if (refreshFiles) {
+            await refreshFiles();
         }
       } else {
-        console.log("isWasmReady", isWasmReady());
+        setCompilationOutput(result.output || `Compilation failed for ${file.name}`);
+        setCompilationSuccess(false);
       }
     } catch (error) {
       setCompilationOutput(
@@ -137,32 +142,49 @@ export default function CompilePanel({
     }
   };
 
-  // 新增：获取bytecode和abi并存入map
-  const getBytecodeAndAbi = async (file: FileType) => {
-    const asmFile = await getFileFromMemFS(
-      `/workspace/${file.name.split(".")[0]}.asm`
-    );
-    const asm = Asm.assemble(asmFile.content);
-    console.log("asm", asm);
-    const abiFile = await getFileFromMemFS(
-      `/workspace/${file.name.split(".")[0]}.abi`
-    );
-    if (asm.success && abiFile?.content) {
-      const compiledResult = compiledResultMap.get(file.name);
-      if (compiledResult) {
-        compiledResultMap.delete(file.name);
-      }
-      if (debugMode) {
-        await writeDbgFile(file.name, asm.debugInfo);
-      }
-      
-      const newMap = new Map();
-      newMap.set(file.name, {
-        bytecode: asm.bytecode,
-        abi: abiFile.content,
-        hash: asm.hash,
-      });
-      setCompiledResultMap(newMap);
+  const processOutputFiles = async (sourceFile: FileType, outputFiles: { name: string; content: string }[]) => {
+    const baseName = sourceFile.name.split(".")[0];
+    const asmFile = outputFiles.find(f => f.name === `${baseName}.asm`);
+    const abiFile = outputFiles.find(f => f.name === `${baseName}.abi`);
+
+    if (asmFile && abiFile) {
+        const asm = Asm.assemble(asmFile.content);
+        console.log("asm", asm);
+        
+        if (asm.success) {
+          const compiledResult = compiledResultMap.get(sourceFile.name);
+          if (compiledResult) {
+            compiledResultMap.delete(sourceFile.name);
+          }
+          let abiContent = JSON.parse(abiFile.content);
+          abiContent.address = asm.hash;
+          abiFile.content = JSON.stringify(abiContent);
+          
+          if (debugMode) {
+            await writeDbgFile(sourceFile.name, asm.debugInfo);
+          }
+          
+          const newMap = new Map(compiledResultMap);
+          newMap.set(sourceFile.name, {
+            bytecode: asm.bytecode,
+            abi: abiFile.content,
+            hash: asm.hash,
+          });
+          setCompiledResultMap(newMap);
+        }
+        // 保存所有输出文件到DB
+        await saveFile({
+          id: asmFile.name,
+          name: asmFile.name,
+          content: asmFile.content,
+          lastModified: new Date().toISOString()
+        })
+        await saveFile({
+          id: abiFile.name,
+          name: abiFile.name,
+          content: abiFile.content,
+          lastModified: new Date().toISOString()
+        })
     }
   };
 
@@ -242,47 +264,6 @@ export default function CompilePanel({
           )}
         </CardContent>
       </Card>
-
-      {/* <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm flex items-center gap-2">
-            <SettingsIcon className="h-4 w-4" />
-            Options
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="space-y-2">
-            <Label htmlFor="optimization" className="text-xs">
-              Optimization
-            </Label>
-            <Select value={optimizationLevel} onValueChange={setOptimizationLevel}>
-              <SelectTrigger className="h-8">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="O0">-O0 (None)</SelectItem>
-                <SelectItem value="O1">-O1 (Basic)</SelectItem>
-                <SelectItem value="O2">-O2 (Full)</SelectItem>
-                <SelectItem value="O3">-O3 (Aggressive)</SelectItem>
-                <SelectItem value="Os">-Os (Size)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="compilerFlags" className="text-xs">
-              Flags
-            </Label>
-            <Input
-              id="compilerFlags"
-              value={compilerFlags}
-              onChange={(e) => setCompilerFlags(e.target.value)}
-              placeholder="-Wall -Wextra"
-              className="h-8"
-            />
-          </div>
-        </CardContent>
-      </Card> */}
 
       <Button
         onClick={handleCompile}
