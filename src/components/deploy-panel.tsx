@@ -44,6 +44,7 @@ import {
   DeployedContractCardProps,
   DeployedContractCard,
 } from "./deployeContractCard";
+import { Address } from "@/utils/address";
 
 interface DeployPanelProps {
   files: FileType[];
@@ -162,37 +163,49 @@ export default function DeployPanel({
     const toutDef = new ToutDef();
     toutDef.tokenType = 0n;
     toutDef.value = 0n;
-    console.log("script size", script.length * 1000);
-
     toutDef.pkScript = script;
-    msg.tOut.push(toutDef);
+
+    const fee = 1200 + script.length * 1000;
+    console.log("fee", fee);
+
+    const changeToutDef = new ToutDef();
+    changeToutDef.tokenType = 0n;
+    const dummyInputUtxoValue = 100000000n; // Example: 1 token 537200
+    const changeAmount = dummyInputUtxoValue - BigInt(fee);
+
+    if (changeAmount < 0n) {
+      toast.error("Insufficient funds for deployment and fee.");
+      setIsDeploying(false);
+      return;
+    }
+    changeToutDef.value = changeAmount;
+    changeToutDef.pkScript = Address.toPkScript(
+      "mszzWYjHEpmGx2LmdZLtud64PADqFHNhHD"
+    );
+
+    msg.tOut.push(toutDef, changeToutDef);
     msg.lockTime = 0;
     msg.signatureScripts = [];
     const rawTx = msg.encode(0);
     const rawTxHex = bytesToHex2(rawTx);
 
     // signrawtransaction
-    const [signedTx, signErr] = await rpcClient
+    const signedTx = await rpcClient
       .getClient(chainType)
       .signRawTransaction(rawTxHex, [], [privateKey], false);
-    if (signErr) {
-      toast.error("Sign raw transaction failed:", { description: signErr });
-      setIsDeploying(false);
-      return;
-    }
-    console.log("sign raw transaction result", signedTx);
     if (!signedTx.hex) {
       toast.error("Sign raw transaction failed");
       setIsDeploying(false);
       return;
     }
+    console.log("sign raw transaction result", signedTx);
 
     // sendrawtransaction
-    const [txHash, sendErr] = await rpcClient
+    const txHash = await rpcClient
       .getClient(chainType)
       .sendRawTransaction(signedTx.hex);
-    if (sendErr) {
-      toast.error("Send raw transaction failed:", { description: sendErr });
+    if (!txHash) {
+      toast.error("Send raw transaction failed");
       setIsDeploying(false);
       return;
     }

@@ -65,13 +65,20 @@ class RPCClient {
         params,
         id: this.sessionId++,
       });
-
-      if (response.data.error) {
-        // Handle JSON-RPC error
-        const errorMessage = response.data.error.message || "Unknown RPC error";
-        return [null, errorMessage];
+      console.log("response", response);
+      console.log(
+        "[rpcCall] method:",
+        method,
+        " params:",
+        params,
+        " response:",
+        response
+      );
+      if (response.data && response.data.error) {
+        console.error("RPC error:", response.data.error);
+        throw new Error(response.data.error.message || "RPC call failed");
       }
-      return [response.data.result, null];
+      return response.data
     } catch (error: any) {
       console.error(`RPC call failed for method ${method}:`, error);
       throw new Error(String(error));
@@ -89,12 +96,13 @@ class RPCClient {
     privkeys: string[],
     ishash: boolean
   ) {
-    return this.rpcCall("signrawtransaction", [
+    const res = await this.rpcCall("signrawtransaction", [
       hexString,
       params,
       privkeys,
       ishash,
     ]);
+    return res.result;
   }
 
   // TODO true,15分别是什么意思？

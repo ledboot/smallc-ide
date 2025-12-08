@@ -67,18 +67,18 @@ export default function CompilePanel({
 
   useEffect(() => {
     const file = cFiles.find((f) => f.id === selectedFile);
-    console.log("compiledResultMap", compiledResultMap)
+    console.log("compiledResultMap", compiledResultMap);
     if (file) {
       const compiledResult = compiledResultMap.get(file.name);
       if (compiledResult) {
-        setCompiledData(compiledResult)
-      }else{
-        setCompiledData(null)
+        setCompiledData(compiledResult);
+      } else {
+        setCompiledData(null);
       }
-      setBytecodeAvailable(!!compiledResult?.bytecode)
-      setAbiAvailable(!!compiledResult?.abi)
+      setBytecodeAvailable(!!compiledResult?.bytecode);
+      setAbiAvailable(!!compiledResult?.abi);
     }
-  }, [compiledResultMap, selectedFile, cFiles])
+  }, [compiledResultMap, selectedFile, cFiles]);
 
   // 复制到剪切板
   const handleCopy = async (text: string) => {
@@ -109,25 +109,48 @@ export default function CompilePanel({
       const args = [];
       // 添加--debug参数（如果启用）
       if (debugMode) {
-        args.push('-debug');
+        args.push("-debug");
       }
-      args.push(`/workspace/${file.name}`);
+      args.push(file.name);
 
-      const result = await compilerService.compile(files, args);
-      
+      const compilationFiles: FileType[] = [];
+      files.some((f) => {
+        if (
+          f.name.endsWith(".c") ||
+          f.name.endsWith(".h") ||
+          f.name.endsWith(".abi")
+        ) {
+          compilationFiles.push(f);
+        }
+      });
+      if (compilationFiles.length === 0) {
+        setCompilationOutput("No C files found");
+        setCompilationSuccess(false);
+        return;
+      }
+
+      console.log("compilationFiles", compilationFiles, "args ", args);
+
+      const result = await compilerService.compile(compilationFiles, args);
+      console.log("compile result",result)
+
       if (result.code === 0) {
-        setCompilationOutput(result.output || `Compilation successful for ${file.name}`);
+        setCompilationOutput(
+          result.output || `Compilation successful for ${file.name}`
+        );
         setCompilationSuccess(true);
-        
+
         // 处理输出文件
         await processOutputFiles(file, result.outputFiles);
-        
+
         // 刷新文件列表
         if (refreshFiles) {
-            await refreshFiles();
+          await refreshFiles();
         }
       } else {
-        setCompilationOutput(result.output || `Compilation failed for ${file.name}`);
+        setCompilationOutput(
+          result.output || `Compilation failed for ${file.name}`
+        );
         setCompilationSuccess(false);
       }
     } catch (error) {
@@ -142,49 +165,52 @@ export default function CompilePanel({
     }
   };
 
-  const processOutputFiles = async (sourceFile: FileType, outputFiles: { name: string; content: string }[]) => {
-    const baseName = sourceFile.name.split(".")[0];
-    const asmFile = outputFiles.find(f => f.name === `${baseName}.asm`);
-    const abiFile = outputFiles.find(f => f.name === `${baseName}.abi`);
+  const processOutputFiles = async (
+    sourceFile: FileType,
+    outputFiles: { name: string; content: string }[]
+  ) => {
+    const baseName = sourceFile.name
+    const asmFile = outputFiles.find((f) => f.name === `${baseName}.asm`);
+    const abiFile = outputFiles.find((f) => f.name === `${baseName}.abi`);
 
     if (asmFile && abiFile) {
-        const asm = Asm.assemble(asmFile.content);
-        console.log("asm", asm);
-        
-        if (asm.success) {
-          const compiledResult = compiledResultMap.get(sourceFile.name);
-          if (compiledResult) {
-            compiledResultMap.delete(sourceFile.name);
-          }
-          let abiContent = JSON.parse(abiFile.content);
-          abiContent.address = asm.hash;
-          abiFile.content = JSON.stringify(abiContent);
-          
-          if (debugMode) {
-            await writeDbgFile(sourceFile.name, asm.debugInfo);
-          }
-          
-          const newMap = new Map(compiledResultMap);
-          newMap.set(sourceFile.name, {
-            bytecode: asm.bytecode,
-            abi: abiFile.content,
-            hash: asm.hash,
-          });
-          setCompiledResultMap(newMap);
+      const asm = Asm.assemble(asmFile.content);
+      console.log("asm", asm);
+
+      if (asm.success) {
+        const compiledResult = compiledResultMap.get(sourceFile.name);
+        if (compiledResult) {
+          compiledResultMap.delete(sourceFile.name);
         }
-        // 保存所有输出文件到DB
-        await saveFile({
-          id: asmFile.name,
-          name: asmFile.name,
-          content: asmFile.content,
-          lastModified: new Date().toISOString()
-        })
-        await saveFile({
-          id: abiFile.name,
-          name: abiFile.name,
-          content: abiFile.content,
-          lastModified: new Date().toISOString()
-        })
+        const abiContent = JSON.parse(abiFile.content);
+        abiContent.address = asm.hash;
+        abiFile.content = JSON.stringify(abiContent);
+
+        if (debugMode) {
+          await writeDbgFile(sourceFile.name, asm.debugInfo);
+        }
+
+        const newMap = new Map(compiledResultMap);
+        newMap.set(sourceFile.name, {
+          bytecode: asm.bytecode,
+          abi: abiFile.content,
+          hash: asm.hash,
+        });
+        setCompiledResultMap(newMap);
+      }
+      // 保存所有输出文件到DB
+      await saveFile({
+        id: asmFile.name,
+        name: asmFile.name,
+        content: asmFile.content,
+        lastModified: new Date().toISOString(),
+      });
+      await saveFile({
+        id: abiFile.name,
+        name: abiFile.name,
+        content: abiFile.content,
+        lastModified: new Date().toISOString(),
+      });
     }
   };
 
@@ -197,7 +223,6 @@ export default function CompilePanel({
     };
     await saveFile(dbgFile);
   };
-
 
   return (
     <div className="flex h-full flex-col p-3 space-y-3">
@@ -220,11 +245,11 @@ export default function CompilePanel({
         </CardHeader>
         <CardContent className="space-y-3">
           {cFiles.length > 0 ? (
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="fileSelect" className="text-xs">
-                    Select C File
-                  </Label>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="fileSelect" className="text-xs">
+                  Select C File
+                </Label>
                 <Select value={selectedFile} onValueChange={setSelectedFile}>
                   <SelectTrigger className="h-8">
                     <SelectValue placeholder="Choose..." />
@@ -241,14 +266,17 @@ export default function CompilePanel({
                   </SelectContent>
                 </Select>
               </div>
-              
+
               <div className="flex items-center space-x-2 pt-2">
-                <Switch 
-                  id="debug-mode" 
+                <Switch
+                  id="debug-mode"
                   checked={debugMode}
                   onCheckedChange={setDebugMode}
                 />
-                <Label htmlFor="debug-mode" className="flex items-center gap-2 text-xs cursor-pointer">
+                <Label
+                  htmlFor="debug-mode"
+                  className="flex items-center gap-2 text-xs cursor-pointer"
+                >
                   <Bug className="h-3.5 w-3.5" />
                   Debug Mode
                 </Label>

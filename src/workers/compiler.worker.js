@@ -28,52 +28,45 @@ self.onmessage = function (e) {
 
     try {
       // 1. Prepare environment
-      if (!self.Module.FS.analyzePath("/workspace").exists) {
-        self.Module.FS.mkdir("/workspace");
-      }
+      // if (!self.Module.FS.analyzePath("/workspace").exists) {
+      //   self.Module.FS.mkdir("/workspace");
+      // }
 
       // 2. Clean workspace (optional but recommended)
       // For now, we overwrite existing files.
       // Ideally, we could delete everything in /workspace first.
-      try {
-        const existingFiles = self.Module.FS.readdir("/workspace");
-        for (const file of existingFiles) {
-          if (file !== "." && file !== "..") {
-            try {
-              self.Module.FS.unlink("/workspace/" + file);
-            } catch (e) {
-              // ignore
-            }
-          }
-        }
-      } catch (e) {
-        // ignore
-      }
+      self.cleanWorkspace();
 
       // 3. Write files
       files.forEach((file) => {
-        const path = `/workspace/${file.name}`;
+        const path = `${file.name}`;
+        console.log("Writing file:", path);
         self.Module.FS.writeFile(path, file.content);
       });
 
       // 4. Compile
       // console.log('Worker running:', args);
       const ret = self.Module.callMain(args);
+      console.log("compile result", ret);
 
       // 5. Capture output files (.asm, .abi)
       // We assume the compiler generates files in /workspace
       // We'll scan the directory for new files or specific extensions
       const outputFiles = [];
-      const allFiles = self.Module.FS.readdir("/workspace");
+      const allFiles = self.Module.FS.readdir("/");
 
       for (const filename of allFiles) {
+        console.log("read file->", filename);
         if (filename.endsWith(".asm") || filename.endsWith(".abi")) {
-          const content = self.Module.FS.readFile("/workspace/" + filename, {
+          const content = self.Module.FS.readFile(filename, {
             encoding: "utf8",
           });
           outputFiles.push({ name: filename, content: content });
+          console.log(filename,"content=",content);
         }
       }
+      // 6. 清理workspace
+      self.cleanWorkspace();
 
       postMessage({
         type: "COMPILE_DONE",
@@ -88,5 +81,42 @@ self.onmessage = function (e) {
         error: err.toString(),
       });
     }
+  }
+};
+
+self.cleanWorkspace = function () {
+  self.rmrf("/");
+};
+
+self.rmrf = function (path) {
+  try {
+    const files = self.Module.FS.readdir(path);
+    for (const file of files) {
+      if (
+        file === "." ||
+        file === ".." ||
+        file === "tmp" ||
+        file === "/" ||
+        file.includes("dev") ||
+        file.includes("home") ||
+        file.includes("proc")
+      )
+        continue;
+      fullPath = "/" + file;
+      if (self.Module.FS.isDir(self.Module.FS.stat(fullPath).mode)) {
+        console.log("rmrf Removing directory:", fullPath);
+        self.rmrf(fullPath);
+      } else {
+        console.log("Removing file:", fullPath);
+        self.Module.FS.unlink(fullPath);
+      }
+    }
+    if (path === "/") {
+      return;
+    }
+    console.log("Removing directory:", path);
+    self.Module.FS.rmdir(path);
+  } catch (e) {
+    console.error("rmrf error:", path, e);
   }
 };
