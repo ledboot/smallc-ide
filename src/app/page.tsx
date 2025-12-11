@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -24,6 +24,11 @@ export default function SmallcIDE() {
   const [currentFile, setCurrentFile] = useState<FileType | null>(null);
   const [openTabs, setOpenTabs] = useState<FileType[]>([]);
   const [activeSidebarTab, setActiveSidebarTab] = useState<SidebarTab>("files");
+
+  // Sidebar State
+  const [sidebarWidth, setSidebarWidth] = useState(320);
+  const isResizingRef = useRef(false);
+
   // compile result cache, key is file name
   const [compiledResultMap, setCompiledResultMap] = useState<
     Map<string, CompiledResult>
@@ -37,6 +42,40 @@ export default function SmallcIDE() {
 
     initialize();
   }, []);
+
+  // Sidebar resize logic
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizingRef.current) return;
+
+      // 48px is the fixed width of the icon sidebar
+      const newWidth = e.clientX - 48;
+      // Min width 150px, Max width 800px
+      if (newWidth >= 150 && newWidth <= 800) {
+        setSidebarWidth(newWidth);
+      }
+    };
+
+    const handleMouseUp = () => {
+      isResizingRef.current = false;
+      document.body.style.cursor = "default";
+      document.body.style.userSelect = "auto";
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, []);
+
+  const startResizing = () => {
+    isResizingRef.current = true;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  };
 
   // Tab management functions
   const handleOpenFile = (file: FileType | null) => {
@@ -146,10 +185,20 @@ export default function SmallcIDE() {
           activeTab={activeSidebarTab}
           onTabChange={setActiveSidebarTab}
         />
-        <aside className="w-80 border-r bg-muted/40 overflow-auto">
+        <aside
+          className="border-r bg-muted/40 overflow-auto flex-shrink-0"
+          style={{ width: sidebarWidth }}
+        >
           {renderSidebarContent()}
         </aside>
-        <div className="flex flex-1 flex-col">
+
+        {/* Resize Handle */}
+        <div
+          className="w-1 hover:bg-primary/50 cursor-col-resize flex-shrink-0 transition-colors"
+          onMouseDown={startResizing}
+        />
+
+        <div className="flex flex-1 flex-col min-w-0">
           <div className="flex-1 overflow-auto flex flex-col">
             <EditorTabs
               openTabs={openTabs}
