@@ -34,7 +34,6 @@ import { generateContractTemplate } from "@/utils/templateGenerator";
 import { runContractMethod } from "@/utils/contractRunner";
 import { useConsoleStore } from "@/lib/console-store";
 import { LogLevel } from "@/lib/console-store";
-import { runTSCode } from "@/utils/tsRunner";
 
 interface CompilePanelProps {
   files: FileType[];
@@ -124,7 +123,7 @@ export default function CompilePanel({
     // Handle TypeScript files separately
     if (file.name.endsWith(".ts")) {
       try {
-        await runTSCode(file.content);
+        await runContractMethod(file.content, "store");
         setCompilationSuccess(true);
         toast.success("TypeScript executed successfully");
       } catch (e) {

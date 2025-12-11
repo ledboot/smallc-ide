@@ -31,20 +31,6 @@ const ConsolePanel = () => {
     }
   }, [logs, autoScroll]);
 
-  const handleCopyAll = () => {
-    const allLogs = filteredLogs
-      .map(
-        (log) =>
-          `[${log.timestamp.toLocaleTimeString()}] [${log.level.toUpperCase()}] ${
-            log.message
-          }`
-      )
-      .join("\n");
-
-    navigator.clipboard.writeText(allLogs);
-    toast.success("已复制到剪贴板");
-  };
-
   const handleClear = () => {
     clearLogs();
     toast.success("日志已清空");
@@ -118,16 +104,6 @@ const ConsolePanel = () => {
           ) : (
             <ChevronUp className="h-4 w-4" />
           )}
-        </Button>
-
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleCopyAll}
-          disabled={filteredLogs.length === 0}
-        >
-          <Copy className="h-4 w-4 mr-1" />
-          复制
         </Button>
 
         <Button

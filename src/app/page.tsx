@@ -7,7 +7,7 @@ import { Separator } from "@/components/ui/separator";
 import FileExplorer from "@/components/file-explorer";
 import Editor from "@/components/editor";
 import type { CompiledResult, FileType } from "@/lib/types";
-import { Loader2 } from "lucide-react";
+import { Loader2, X, ChevronUp } from "lucide-react";
 import Sidebar, { type SidebarTab } from "@/components/sidebar";
 import DeployPanel from "@/components/deploy-panel";
 import DebugPanel from "@/components/debug-panel";
@@ -27,6 +27,7 @@ export default function SmallcIDE() {
 
   // Sidebar State
   const [sidebarWidth, setSidebarWidth] = useState(320);
+  const [isConsoleOpen, setIsConsoleOpen] = useState(true);
   const isResizingRef = useRef(false);
 
   // compile result cache, key is file name
@@ -239,23 +240,65 @@ export default function SmallcIDE() {
               </div>
             )}
           </div>
-          <Separator />
-          <div className="h-1/3 min-h-[200px] overflow-auto">
-            <Tabs defaultValue="console" className="rounded-none">
-              <TabsList className="px-4 pt-2">
-                <TabsTrigger value="console">Console</TabsTrigger>
-                <TabsTrigger value="testing">Testing</TabsTrigger>
-              </TabsList>
-              <TabsContent value="console">
-                <ConsolePanel />
-              </TabsContent>
-              <TabsContent value="testing" className="p-4">
-                <div className="text-center text-muted-foreground">
-                  Testing functionality will be implemented soon
+          {isConsoleOpen ? (
+            <div className="h-1/3 min-h-[200px] flex flex-col border-t">
+              <Tabs defaultValue="console" className="flex flex-col h-full">
+                <div className="flex items-center justify-between bg-background px-4">
+                  <TabsList className="p-0 bg-transparent mb-0 h-9">
+                    <TabsTrigger
+                      value="console"
+                      className="data-[state=active]:bg-secondary rounded-none h-9 px-4"
+                    >
+                      Console
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="testing"
+                      className="ml-1 data-[state=active]:bg-secondary rounded-none  h-9 px-4"
+                    >
+                      Testing
+                    </TabsTrigger>
+                  </TabsList>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6"
+                    onClick={() => setIsConsoleOpen(false)}
+                    title="Close Panel"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
                 </div>
-              </TabsContent>
-            </Tabs>
-          </div>
+                <div className="flex-1 overflow-hidden relative">
+                  <TabsContent
+                    value="console"
+                    className="h-full m-0 data-[state=inactive]:hidden"
+                  >
+                    <ConsolePanel />
+                  </TabsContent>
+                  <TabsContent
+                    value="testing"
+                    className="h-full m-0 p-4 overflow-auto data-[state=inactive]:hidden"
+                  >
+                    <div className="text-center text-muted-foreground">
+                      Testing functionality will be implemented soon
+                    </div>
+                  </TabsContent>
+                </div>
+              </Tabs>
+            </div>
+          ) : (
+            <div className="flex justify-end border-t bg-background p-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 text-xs gap-1"
+                onClick={() => setIsConsoleOpen(true)}
+              >
+                <ChevronUp className="h-3 w-3" />
+                Show Panel
+              </Button>
+            </div>
+          )}
         </div>
       </div>
     </div>
