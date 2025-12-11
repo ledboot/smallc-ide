@@ -39,6 +39,7 @@ export default function Editor({
     if (fileName.endsWith(".h") || fileName.endsWith(".hpp")) return "cpp";
     if (fileName.endsWith(".js")) return "javascript";
     if (fileName.endsWith(".json")) return "json";
+    if (fileName.endsWith(".ts")) return "typescript";
     return "plaintext";
   };
 
@@ -48,6 +49,31 @@ export default function Editor({
   ) => {
     editorRef.current = editor;
     monacoRef.current = monacoInstance;
+
+    // Set global instance for runner access
+    import("@/lib/monaco-instance").then(({ setMonacoInstance }) => {
+      setMonacoInstance(monacoInstance, editor);
+    });
+
+    // Add extra libs for external modules
+    monacoInstance.languages.typescript.typescriptDefaults.addExtraLib(
+      `
+      declare module "@noble/hashes/sha2.js" {
+        export function sha256(msg: Uint8Array | string): Uint8Array;
+      }
+      declare module "@noble/hashes/sha2" {
+        export function sha256(msg: Uint8Array | string): Uint8Array;
+      }
+       declare module "@noble/hashes/sha256" {
+        export function sha256(msg: Uint8Array | string): Uint8Array;
+      }
+      declare module "big-integer" {
+        function bigInt(value: any): any;
+        export = bigInt;
+      }
+      `,
+      "file:///node_modules/@types/external-libs/index.d.ts"
+    );
 
     const setupBreakpoints = () => {
       const model = editor.getModel();
@@ -319,11 +345,11 @@ export default function Editor({
         onMount={handleEditorDidMount}
         theme="github-light"
         options={{
-          minimap: { 
+          minimap: {
             enabled: true,
-            side: 'right',
-            size: 'proportional',
-            showSlider: 'mouseover',
+            side: "right",
+            size: "proportional",
+            showSlider: "mouseover",
             renderCharacters: true,
             maxColumn: 120,
             scale: 1,
@@ -345,15 +371,15 @@ export default function Editor({
           overviewRulerLanes: 3,
           overviewRulerBorder: true,
           scrollbar: {
-            vertical: 'auto',
-            horizontal: 'auto',
+            vertical: "auto",
+            horizontal: "auto",
             useShadows: true,
             verticalHasArrows: false,
             horizontalHasArrows: false,
             verticalScrollbarSize: 12,
             horizontalScrollbarSize: 12,
-            arrowSize: 20
-          }
+            arrowSize: 20,
+          },
         }}
       />
       <style jsx global>{`

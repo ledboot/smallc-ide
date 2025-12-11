@@ -170,7 +170,7 @@ export default function DeployPanel({
 
     const changeToutDef = new ToutDef();
     changeToutDef.tokenType = 0n;
-    const dummyInputUtxoValue = 100000000n; // Example: 1 token 537200
+    const dummyInputUtxoValue = 99718797n; // Example: 1 token 537200
     const changeAmount = dummyInputUtxoValue - BigInt(fee);
 
     if (changeAmount < 0n) {
@@ -226,6 +226,49 @@ export default function DeployPanel({
     });
 
     toast.success("Transaction sent successfully");
+
+    // Auto-generate template JS after successful deployment
+    try {
+      const { generateContractTemplate } = await import(
+        "@/utils/templateGenerator"
+      );
+      const { saveFile, createFolder } = await import("@/lib/db");
+
+      const abiObj = JSON.parse(result.abi);
+      const abiWithAddress = {
+        address: result.hash,
+        ...abiObj,
+      };
+
+      const templateCode = generateContractTemplate(abiWithAddress);
+      const filename = `${selectedFile.name.replace(".c", "")}_runner.js`;
+
+      // Ensure .build directory exists
+      const buildDir = "/.build";
+      try {
+        await createFolder(buildDir);
+      } catch (e) {
+        // Directory might already exist, ignore
+      }
+
+      // Save file
+      const filePath = `${buildDir}/${filename}`;
+      await saveFile({
+        id: filePath,
+        name: filename,
+        content: templateCode,
+        path: filePath,
+        isDirectory: false,
+        lastModified: new Date().toISOString(),
+      });
+
+      toast.success("Template generated", {
+        description: `Saved to .build/${filename}`,
+      });
+    } catch (error) {
+      console.error("Failed to auto-generate template:", error);
+      // Don't show error toast since deployment was successful
+    }
   };
 
   const handleSetChainType = (chainType: ChainType) => {

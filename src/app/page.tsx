@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -15,7 +15,7 @@ import SearchPanel from "@/components/search-panel";
 import SettingsPanel from "@/components/settings-panel";
 import CompilePanel from "@/components/compile-panel";
 import { initWasmCompiler } from "@/lib/wasm-compiler";
-import ConsolePanel, { ConsolePanelRef } from "@/components/console-panel";
+import ConsolePanel from "@/components/console-panel";
 import EditorTabs from "@/components/editor-tabs";
 
 export default function SmallcIDE() {
@@ -24,7 +24,6 @@ export default function SmallcIDE() {
   const [currentFile, setCurrentFile] = useState<FileType | null>(null);
   const [openTabs, setOpenTabs] = useState<FileType[]>([]);
   const [activeSidebarTab, setActiveSidebarTab] = useState<SidebarTab>("files");
-  const consoleRef = useRef<ConsolePanelRef>(null);
   // compile result cache, key is file name
   const [compiledResultMap, setCompiledResultMap] = useState<
     Map<string, CompiledResult>
@@ -199,7 +198,7 @@ export default function SmallcIDE() {
                 <TabsTrigger value="testing">Testing</TabsTrigger>
               </TabsList>
               <TabsContent value="console">
-                <ConsolePanel ref={consoleRef} />
+                <ConsolePanel />
               </TabsContent>
               <TabsContent value="testing" className="p-4">
                 <div className="text-center text-muted-foreground">

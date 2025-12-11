@@ -27,10 +27,6 @@ self.onmessage = function (e) {
     const { args, files } = payload;
 
     try {
-      // 1. Prepare environment
-      // if (!self.Module.FS.analyzePath("/workspace").exists) {
-      //   self.Module.FS.mkdir("/workspace");
-      // }
 
       // 2. Clean workspace (optional but recommended)
       // For now, we overwrite existing files.
@@ -62,7 +58,6 @@ self.onmessage = function (e) {
             encoding: "utf8",
           });
           outputFiles.push({ name: filename, content: content });
-          console.log(filename,"content=",content);
         }
       }
       // 6. 清理workspace

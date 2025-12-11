@@ -1,12 +1,14 @@
 import { useState } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Copy } from "lucide-react";
+import { Copy, FileCode } from "lucide-react";
 import { toast } from "sonner";
 import { bytesToHex2, hashReverse } from "@/utils/index";
 import { MsgT } from "@/utils/msgTools";
 import { rpcClient } from "@/lib/api";
 import { ToutDef } from "@/utils/defs";
 import { useRootStore } from "@/state";
+import { generateContractTemplate } from "@/utils/templateGenerator";
+import { saveFile, createFolder } from "@/lib/db";
 
 export interface ContractMethod {
   signature: string;
@@ -90,7 +92,7 @@ export const DeployedContractCard = ({
       "6f": "41000000",
       "3f": "41000000",
       "7b": "42000000",
-      "c4": "42000000",
+      c4: "42000000",
       "05": "42000000",
       "78": "43000000",
       "67": "43000000",
@@ -132,6 +134,49 @@ export const DeployedContractCard = ({
     console.log("result", result);
   };
 
+  const handleGenerateTemplate = async () => {
+    try {
+      // Parse ABI to create the template
+      const abiObj = JSON.parse(abi);
+      const abiWithAddress = {
+        address: contractAddress,
+        ...abiObj,
+      };
+
+      // Generate template JS
+      const templateCode = generateContractTemplate(abiWithAddress);
+
+      // Ensure .build directory exists
+      const buildDir = "/.build";
+      try {
+        await createFolder(buildDir);
+      } catch (e) {
+        // Directory might already exist, ignore
+      }
+
+      // Save to .build directory
+      const filename = `${contractName.replace(".c", "")}_runner.js`;
+      const filePath = `${buildDir}/${filename}`;
+      await saveFile({
+        id: filePath,
+        name: filename,
+        content: templateCode,
+        path: filePath,
+        isDirectory: false,
+        lastModified: new Date().toISOString(),
+      });
+
+      toast.success("Template generated", {
+        description: `Saved to .build/${filename}`,
+      });
+    } catch (error) {
+      console.error("Failed to generate template:", error);
+      toast.error("Failed to generate template", {
+        description: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  };
+
   const methods = parseABI(abi);
 
   if (methods.length === 0) return null;
@@ -146,6 +191,12 @@ export const DeployedContractCard = ({
           <div className="flex items-center space-x-2">
             <div className="text-xs font-mono">
               {contractAddress.slice(0, 7)}...{contractAddress.slice(-4)}
+            </div>
+            <div title="Generate Template JS">
+              <FileCode
+                className="w-3 h-3 font-mono hover:text-green-500 hover:cursor-pointer"
+                onClick={handleGenerateTemplate}
+              />
             </div>
             <Copy
               className="w-3 h-3 font-mono hover:text-blue-500 hover:cursor-pointer"

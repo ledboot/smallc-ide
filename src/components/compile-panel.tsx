@@ -25,10 +25,16 @@ import {
 import { Switch } from "@/components/ui/switch";
 import type { CompiledResult, FileType } from "@/lib/types";
 import { compilerService, isWasmReady } from "@/lib/wasm-compiler";
-import { saveFile } from "@/lib/db";
+import { createFolder, getFile, saveFile } from "@/lib/db";
 import { toast } from "sonner";
 
 import { Asm } from "@/lib/asm";
+
+import { generateContractTemplate } from "@/utils/templateGenerator";
+import { runContractMethod } from "@/utils/contractRunner";
+import { useConsoleStore } from "@/lib/console-store";
+import { LogLevel } from "@/lib/console-store";
+import { runTSCode } from "@/utils/tsRunner";
 
 interface CompilePanelProps {
   files: FileType[];
@@ -48,25 +54,30 @@ export default function CompilePanel({
   const [compilationSuccess, setCompilationSuccess] = useState<boolean | null>(
     null
   );
-  const [compilationOutput, setCompilationOutput] = useState<string>("");
 
   const [bytecodeAvailable, setBytecodeAvailable] = useState<boolean>(false);
   const [abiAvailable, setAbiAvailable] = useState<boolean>(false);
+  const [executeJSAvailable, setExecuteJSAvailable] = useState<boolean>(false);
   const [compiledData, setCompiledData] = useState<CompiledResult | null>(null);
   const [debugMode, setDebugMode] = useState(false);
+  const [executeJSFile, setExecuteJSFile] = useState<FileType | null>(null);
 
-  // 过滤出.c文件
-  const cFiles = files.filter((file) => file.name.endsWith(".c"));
+  const { addLog } = useConsoleStore();
 
-  // 当文件列表变化时，自动选择第一个.c文件
+  // Filter out .c and .ts files
+  const sourceFiles = files.filter(
+    (file) => file.name.endsWith(".c") || file.name.endsWith(".ts")
+  );
+
+  // Automatically select first file
   useEffect(() => {
-    if (cFiles.length > 0 && !selectedFile) {
-      setSelectedFile(cFiles[0].id);
+    if (sourceFiles.length > 0 && !selectedFile) {
+      setSelectedFile(sourceFiles[0].id);
     }
-  }, [cFiles, selectedFile]);
+  }, [sourceFiles, selectedFile]);
 
   useEffect(() => {
-    const file = cFiles.find((f) => f.id === selectedFile);
+    const file = sourceFiles.find((f) => f.id === selectedFile);
     console.log("compiledResultMap", compiledResultMap);
     if (file) {
       const compiledResult = compiledResultMap.get(file.name);
@@ -78,7 +89,7 @@ export default function CompilePanel({
       setBytecodeAvailable(!!compiledResult?.bytecode);
       setAbiAvailable(!!compiledResult?.abi);
     }
-  }, [compiledResultMap, selectedFile, cFiles]);
+  }, [compiledResultMap, selectedFile, sourceFiles]);
 
   // 复制到剪切板
   const handleCopy = async (text: string) => {
@@ -87,22 +98,43 @@ export default function CompilePanel({
     toast.success("复制成功");
   };
 
+  const executeJS = async () => {
+    if (!executeJSFile) return;
+    const result = await runContractMethod(executeJSFile.content, "store");
+    addLog(`Execution successful: ${result}`, LogLevel.SUCCESS);
+  };
+
   const handleCompile = async () => {
     if (!selectedFile) {
-      setCompilationOutput("Please select a C file to compile");
+      // setCompilationOutput("Please select a file to compile");
       setCompilationSuccess(false);
       return;
     }
 
-    const file = cFiles.find((f) => f.id === selectedFile);
+    const file = sourceFiles.find((f) => f.id === selectedFile);
     if (!file) {
-      setCompilationOutput("Selected file not found");
+      // setCompilationOutput("Selected file not found");
       setCompilationSuccess(false);
       return;
     }
 
     setIsCompiling(true);
     setCompilationSuccess(null);
+
+    // Handle TypeScript files separately
+    if (file.name.endsWith(".ts")) {
+      try {
+        await runTSCode(file.content);
+        setCompilationSuccess(true);
+        toast.success("TypeScript executed successfully");
+      } catch (e) {
+        setCompilationSuccess(false);
+        toast.error("Execution failed");
+      } finally {
+        setIsCompiling(false);
+      }
+      return;
+    }
 
     try {
       // 构建编译参数
@@ -124,7 +156,7 @@ export default function CompilePanel({
         }
       });
       if (compilationFiles.length === 0) {
-        setCompilationOutput("No C files found");
+        // setCompilationOutput("No C files found");
         setCompilationSuccess(false);
         return;
       }
@@ -132,12 +164,12 @@ export default function CompilePanel({
       console.log("compilationFiles", compilationFiles, "args ", args);
 
       const result = await compilerService.compile(compilationFiles, args);
-      console.log("compile result",result)
+      console.log("compile result", result);
 
       if (result.code === 0) {
-        setCompilationOutput(
-          result.output || `Compilation successful for ${file.name}`
-        );
+        // setCompilationOutput(
+        //   result.output || `Compilation successful for ${file.name}`
+        // );
         setCompilationSuccess(true);
 
         // 处理输出文件
@@ -147,21 +179,74 @@ export default function CompilePanel({
         if (refreshFiles) {
           await refreshFiles();
         }
+        generateTemplate(file);
       } else {
-        setCompilationOutput(
-          result.output || `Compilation failed for ${file.name}`
-        );
+        // setCompilationOutput(
+        //   result.output || `Compilation failed for ${file.name}`
+        // );
         setCompilationSuccess(false);
       }
     } catch (error) {
-      setCompilationOutput(
-        `Compilation error: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
+      // setCompilationOutput(
+      //   `Compilation error: ${
+      //     error instanceof Error ? error.message : String(error)
+      //   }`
+      // );
       setCompilationSuccess(false);
     } finally {
       setIsCompiling(false);
+    }
+  };
+
+  const generateTemplate = async (sourceFile: FileType) => {
+    try {
+      const baseName = sourceFile.name.split(".").slice(0, -1).join(".");
+      const abiFileName = `/${baseName}.abi`;
+      const abiFile = await getFile(abiFileName);
+      console.log("abiFile", abiFile);
+      if (!abiFile) {
+        toast.error("ABI file not found");
+        return;
+      }
+      // Parse ABI to create the template
+
+      // Generate template JS
+      const templateCode = generateContractTemplate(
+        JSON.parse(abiFile.content)
+      );
+      console.log("templateCode", templateCode);
+
+      // Ensure .build directory exists
+      const buildDir = "/.build";
+      try {
+        await createFolder(buildDir);
+      } catch (e) {
+        // Directory might already exist, ignore
+      }
+
+      // Save to .build directory
+      const filename = `${baseName}_runner.ts`;
+      const filePath = `${buildDir}/${filename}`;
+      const file: FileType = {
+        id: filePath,
+        name: filename,
+        content: templateCode,
+        path: filePath,
+        isDirectory: false,
+        lastModified: new Date().toISOString(),
+      };
+      await saveFile(file);
+      setExecuteJSAvailable(true);
+      setExecuteJSFile(file);
+
+      toast.success("Template generated", {
+        description: `Saved to .build/${filename}`,
+      });
+    } catch (error) {
+      console.error("Failed to generate template:", error);
+      toast.error("Failed to generate template", {
+        description: error instanceof Error ? error.message : "Unknown error",
+      });
     }
   };
 
@@ -169,7 +254,8 @@ export default function CompilePanel({
     sourceFile: FileType,
     outputFiles: { name: string; content: string }[]
   ) => {
-    const baseName = sourceFile.name
+    const baseName = sourceFile.name.split(".").slice(0, -1).join(".");
+
     const asmFile = outputFiles.find((f) => f.name === `${baseName}.asm`);
     const abiFile = outputFiles.find((f) => f.name === `${baseName}.abi`);
 
@@ -244,18 +330,18 @@ export default function CompilePanel({
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          {cFiles.length > 0 ? (
+          {sourceFiles.length > 0 ? (
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="fileSelect" className="text-xs">
-                  Select C File
+                  Select Source File
                 </Label>
                 <Select value={selectedFile} onValueChange={setSelectedFile}>
                   <SelectTrigger className="h-8">
                     <SelectValue placeholder="Choose..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {cFiles.map((file) => (
+                    {sourceFiles.map((file) => (
                       <SelectItem key={file.id} value={file.id}>
                         <div className="flex items-center gap-2">
                           <FileIcon className="h-3 w-3" />
@@ -286,7 +372,7 @@ export default function CompilePanel({
             <Alert>
               <InfoIcon className="h-4 w-4" />
               <AlertDescription className="text-xs">
-                No C files found. Create a .c file to get started.
+                No source files found. Create a .c or .ts file to get started.
               </AlertDescription>
             </Alert>
           )}
@@ -295,7 +381,7 @@ export default function CompilePanel({
 
       <Button
         onClick={handleCompile}
-        disabled={isCompiling || !selectedFile || cFiles.length === 0}
+        disabled={isCompiling || !selectedFile || sourceFiles.length === 0}
         className="w-full"
       >
         {isCompiling ? (
@@ -306,7 +392,7 @@ export default function CompilePanel({
         ) : (
           <>
             <PlayIcon className="mr-2 h-4 w-4" />
-            Compile
+            {selectedFile.endsWith(".ts") ? "Run TS" : "Compile"}
           </>
         )}
       </Button>
@@ -323,14 +409,18 @@ export default function CompilePanel({
             <>
               <CheckCircleIcon className="h-4 w-4 text-green-600" />
               <AlertDescription className="text-green-800 text-xs">
-                Compilation successful!
+                {selectedFile.endsWith(".ts")
+                  ? "Execution successful!"
+                  : "Compilation successful!"}
               </AlertDescription>
             </>
           ) : (
             <>
               <AlertCircleIcon className="h-4 w-4 text-red-600" />
               <AlertDescription className="text-red-800 text-xs">
-                Compilation failed.
+                {selectedFile.endsWith(".ts")
+                  ? "Execution failed."
+                  : "Compilation failed."}
               </AlertDescription>
             </>
           )}
@@ -339,12 +429,9 @@ export default function CompilePanel({
 
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm">Output</CardTitle>
+          <CardTitle className="text-sm">Action</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="h-48 overflow-auto rounded-md border bg-muted p-2 font-mono text-xs whitespace-pre-wrap">
-            {compilationOutput}
-          </div>
           <div className="flex items-center gap-2 mt-2">
             <Button
               variant="outline"
@@ -363,6 +450,15 @@ export default function CompilePanel({
             >
               <Copy className="h-4 w-4" />
               Bytecode
+            </Button>
+            <Button
+              variant="outline"
+              className="cursor-pointer"
+              disabled={!abiAvailable}
+              onClick={() => executeJS()}
+            >
+              <Copy className="h-4 w-4" />
+              ExecuteJS
             </Button>
           </div>
         </CardContent>
