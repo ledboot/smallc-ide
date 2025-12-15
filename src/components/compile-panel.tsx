@@ -34,6 +34,8 @@ import { generateContractTemplate } from "@/utils/templateGenerator";
 import { runContractMethod } from "@/utils/contractRunner";
 import { useConsoleStore } from "@/lib/console-store";
 import { LogLevel } from "@/lib/console-store";
+import { rpcClient } from "@/lib/api";
+import { useRootStore } from "@/state";
 
 interface CompilePanelProps {
   files: FileType[];
@@ -54,14 +56,11 @@ export default function CompilePanel({
     null
   );
 
-  const [bytecodeAvailable, setBytecodeAvailable] = useState<boolean>(false);
-  const [abiAvailable, setAbiAvailable] = useState<boolean>(false);
-  const [executeJSAvailable, setExecuteJSAvailable] = useState<boolean>(false);
   const [compiledData, setCompiledData] = useState<CompiledResult | null>(null);
   const [debugMode, setDebugMode] = useState(false);
-  const [executeJSFile, setExecuteJSFile] = useState<FileType | null>(null);
 
   const { addLog } = useConsoleStore();
+  const { chainType } = useRootStore().settings;
 
   // Filter out .c and .ts files
   const sourceFiles = files.filter(
@@ -85,23 +84,8 @@ export default function CompilePanel({
       } else {
         setCompiledData(null);
       }
-      setBytecodeAvailable(!!compiledResult?.bytecode);
-      setAbiAvailable(!!compiledResult?.abi);
     }
   }, [compiledResultMap, selectedFile, sourceFiles]);
-
-  // 复制到剪切板
-  const handleCopy = async (text: string) => {
-    if (!text) return;
-    await navigator.clipboard.writeText(text);
-    toast.success("复制成功");
-  };
-
-  const executeJS = async () => {
-    if (!executeJSFile) return;
-    const result = await runContractMethod(executeJSFile.content, "store");
-    addLog(`Execution successful: ${result}`, LogLevel.SUCCESS);
-  };
 
   const handleCompile = async () => {
     if (!selectedFile) {
@@ -123,7 +107,11 @@ export default function CompilePanel({
     // Handle TypeScript files separately
     if (file.name.endsWith(".ts")) {
       try {
-        await runContractMethod(file.content, "store");
+        const rawTx = await runContractMethod(file.content, "store");
+        const result = await rpcClient
+          .getClient(chainType)
+          .sendRawTransaction(rawTx);
+        console.log("result", result);
         setCompilationSuccess(true);
         toast.success("TypeScript executed successfully");
       } catch (e) {
@@ -235,8 +223,6 @@ export default function CompilePanel({
         lastModified: new Date().toISOString(),
       };
       await saveFile(file);
-      setExecuteJSAvailable(true);
-      setExecuteJSFile(file);
 
       toast.success("Template generated", {
         description: `Saved to .build/${filename}`,
@@ -425,43 +411,6 @@ export default function CompilePanel({
           )}
         </Alert>
       )}
-
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm">Action</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center gap-2 mt-2">
-            <Button
-              variant="outline"
-              className="cursor-pointer"
-              disabled={!abiAvailable}
-              onClick={() => handleCopy(compiledData?.abi || "")}
-            >
-              <Copy className="h-4 w-4" />
-              ABI
-            </Button>
-            <Button
-              variant="outline"
-              className="cursor-pointer"
-              disabled={!bytecodeAvailable}
-              onClick={() => handleCopy(compiledData?.bytecode || "")}
-            >
-              <Copy className="h-4 w-4" />
-              Bytecode
-            </Button>
-            <Button
-              variant="outline"
-              className="cursor-pointer"
-              disabled={!abiAvailable}
-              onClick={() => executeJS()}
-            >
-              <Copy className="h-4 w-4" />
-              ExecuteJS
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 }

@@ -168,10 +168,10 @@ const executeJS = async (code: string, methodName: string, args: any[]) => {
       if (exports[methodName] && typeof exports[methodName] === "function") {
         const result = await exports[methodName](...args);
         if (result !== undefined) {
-          addLog(`Result: ${formatArgs([result])}`, LogLevel.SUCCESS);
+          addLog(`TS Result: ${formatArgs([result])}`, LogLevel.SUCCESS);
         } else {
           addLog(
-            `Method '${methodName}' executed successfully (no return value)`,
+            `TS Method '${methodName}' executed successfully (no return value)`,
             LogLevel.SUCCESS
           );
         }
@@ -180,7 +180,7 @@ const executeJS = async (code: string, methodName: string, args: any[]) => {
           (k) => typeof exports[k] === "function"
         );
         addLog(
-          `Method '${methodName}' not found or not exported. Available: ${available.join(
+          `TS Method '${methodName}' not found or not exported. Available: ${available.join(
             ", "
           )}`,
           LogLevel.WARN
@@ -198,7 +198,7 @@ const executeJS = async (code: string, methodName: string, args: any[]) => {
           );
           const result = await exports.default[methodName](...args);
           if (result !== undefined) {
-            addLog(`Result: ${formatArgs([result])}`, LogLevel.SUCCESS);
+            addLog(`TS Result: ${formatArgs([result])}`, LogLevel.SUCCESS);
           }
         }
       }

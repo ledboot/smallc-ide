@@ -105,7 +105,7 @@ class RPCClient {
     return res.result;
   }
 
-  // TODO true,15分别是什么意思？
+  // TODO true,15秒内确认
   async sendRawTransaction(hextx: string) {
     return this.rpcCall("sendrawtransaction", [hextx, true, 15]);
   }
