@@ -27,6 +27,7 @@ self.onmessage = function (e) {
     const { args, files } = payload;
 
     try {
+      self.ls();
 
       // 2. Clean workspace (optional but recommended)
       // For now, we overwrite existing files.
@@ -76,6 +77,13 @@ self.onmessage = function (e) {
         error: err.toString(),
       });
     }
+  }
+};
+
+self.ls = function () {
+  const files = self.Module.FS.readdir("/");
+  for (const file of files) {
+    console.log("ls->", file);
   }
 };
 
