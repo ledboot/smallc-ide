@@ -201,7 +201,6 @@ export default function CompilePanel({
       const templateCode = generateContractTemplate(
         JSON.parse(abiFile.content)
       );
-      console.log("templateCode", templateCode);
 
       // Ensure .build directory exists
       const buildDir = "/.build";
@@ -212,20 +211,33 @@ export default function CompilePanel({
       }
 
       // Save to .build directory
-      const filename = `${baseName}_runner.ts`;
-      const filePath = `${buildDir}/${filename}`;
-      const file: FileType = {
-        id: filePath,
-        name: filename,
+      const timestamp = Math.floor(Date.now() / 1000).toString();
+      const timestampFilename = `${baseName}_${timestamp}.ts`;
+      const latestFilename = `${baseName}_latest.ts`;
+
+      const timestampFile: FileType = {
+        id: `${buildDir}/${timestampFilename}`,
+        name: timestampFilename,
         content: templateCode,
-        path: filePath,
+        path: `${buildDir}/${timestampFilename}`,
         isDirectory: false,
         lastModified: new Date().toISOString(),
       };
-      await saveFile(file);
+
+      const latestFile: FileType = {
+        id: `${buildDir}/${latestFilename}`,
+        name: latestFilename,
+        content: templateCode,
+        path: `${buildDir}/${latestFilename}`,
+        isDirectory: false,
+        lastModified: new Date().toISOString(),
+      };
+
+      await saveFile(timestampFile);
+      await saveFile(latestFile);
 
       toast.success("Template generated", {
-        description: `Saved to .build/${filename}`,
+        description: `Saved to .build/${latestFilename}`,
       });
     } catch (error) {
       console.error("Failed to generate template:", error);

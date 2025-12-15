@@ -131,6 +131,33 @@ export default function SmallcIDE() {
             setFiles={setFiles}
             currentFile={currentFile}
             setCurrentFile={handleOpenFile}
+            onFileDelete={(file) => {
+              // If deleted file is currently open, close the tab
+              if (file.isDirectory) {
+                // For directory, close all tabs within that directory
+                const tabsToClose = openTabs.filter((tab) =>
+                  tab.id.startsWith(file.id + "/")
+                );
+
+                if (tabsToClose.length > 0) {
+                  const idsToClose = new Set(tabsToClose.map((t) => t.id));
+                  const newTabs = openTabs.filter(
+                    (tab) => !idsToClose.has(tab.id)
+                  );
+                  setOpenTabs(newTabs);
+
+                  if (currentFile && idsToClose.has(currentFile.id)) {
+                    if (newTabs.length > 0) {
+                      setCurrentFile(newTabs[newTabs.length - 1]);
+                    } else {
+                      setCurrentFile(null);
+                    }
+                  }
+                }
+              } else {
+                handleCloseTab(file.id);
+              }
+            }}
           />
         );
       case "search":

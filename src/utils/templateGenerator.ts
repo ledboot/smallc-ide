@@ -56,38 +56,8 @@ const privateKey = "";
  * Method Hash: ${methodHash}
  */
 export function ${methodName}() { // Parameters from ABI: ${params.join(", ")}
-    console.log("Generating params for ${methodName}...");
-    
-    // 1. Construct Transaction Data
-    // Logic from deployeContractCard.tsx
-    
-    // Note: The example logic in deployeContractCard.tsx was specific to a "transfer" like Op.
-    // "params" need to be encoded. 
-    // In the example: 
-    // const amountHex = Number(amount).toString(16).padStart(16, "0");
-    // const txData = hashReverse(amountHex) + pkScript;
-    
-    // For general purpose we might need a generic encoder, but for this specific "store" template,
-    // we will provide the raw placeholders as requested.
-    
-    // The user's request: "store方法的内容需要开发自己填写，返回rawTxHex"
-    // So we generate the boilerplate but leave the specific encoding logic for them or provide a suggestion.
-    
-    const toAddress = contractAddress;
-    const ops = getOps(toAddress);
-    const pkScript = \`\${toAddress}\${ops}\`; // Simplified based on example
-
-    // --- Developer Implementation Area ---
-    // Encode your parameters here.
-    // Example for 'store(int num)':
-    // const numHex = Number(num).toString(16).padStart(16, "0");
-    // const data = hashReverse(numHex); 
-    
-    // Placeholder Logic:
-    const data = ""; // TODO: Implement parameter encoding
-    
-    const txData = \`\${data}\${pkScript}\`;
-    
+    // --- Developer Implementation ---
+    console.log("Generating params for ${methodName}...");    
     // --- End Developer Implementation ---
 }
 `;

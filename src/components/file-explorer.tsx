@@ -44,6 +44,7 @@ interface FileExplorerProps {
   setFiles: (files: FileType[]) => void;
   currentFile: FileType | null;
   setCurrentFile: (file: FileType | null) => void;
+  onFileDelete?: (file: FileType) => void;
 }
 
 const buildTreeFromFiles = (files: FileType[]): FileType[] => {
@@ -104,6 +105,7 @@ export default function FileExplorer({
   setFiles,
   currentFile,
   setCurrentFile,
+  onFileDelete,
 }: FileExplorerProps) {
   const [isCreateFileDialogOpen, setIsCreateFileDialogOpen] = useState(false);
   const [isCreateFolderDialogOpen, setIsCreateFolderDialogOpen] =
@@ -263,6 +265,12 @@ int main() {
       if (currentFile && currentFile.id === item.id) {
         setCurrentFile(null);
       }
+
+      // Notify parent about deletion
+      if (onFileDelete) {
+        onFileDelete(item);
+      }
+
       toast.success(`Deleted ${item.name}`);
     } catch (error) {
       console.error("Delete error:", error);
