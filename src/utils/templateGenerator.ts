@@ -39,7 +39,8 @@ const privateKey = "";
     if (key === "address" || key === "") continue;
 
     const signature = key;
-    const methodHash = value;
+    const methodHash = value as string;
+    const methodHexWithx = (value as string).slice(1);
     // Parse signature: "void store(int num)"
     const match = signature.match(/\s*(\w+)\s*\((.*)\)/);
     if (!match) continue;
@@ -57,7 +58,9 @@ const privateKey = "";
  */
 export function ${methodName}() { // Parameters from ABI: ${params.join(", ")}
     // --- Developer Implementation ---
-    console.log("Generating params for ${methodName}...");    
+    console.log("Generating params for ${methodName}...");
+    const methodHex = "${methodHexWithx}";
+    const revMethodHex = hashReverse(methodHex.padStart(8, "0"));   
     // --- End Developer Implementation ---
 }
 `;

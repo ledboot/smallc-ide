@@ -100,6 +100,7 @@ export const base58 = new Base58();
 
 // --- packer.ts ---
 
+
 export class Packer {
     private dest: number[] = [];
   
@@ -191,6 +192,7 @@ export class Packer {
   }
 
 // --- reader.ts ---
+
 
 export class Reader {
     private src: Uint8Array = new Uint8Array(0);
@@ -313,6 +315,11 @@ export class Reader {
   
 
 // --- defs.ts ---
+
+
+
+
+
 
 export class BorderDef {
   type: string;
@@ -711,6 +718,10 @@ export class ToutDef {
 // --- index.ts ---
 
 
+
+
+
+
 // 辅助函数：将字符转换为半字节值
 export function nib(charCode: number): number {
   if (charCode >= 48 && charCode <= 57) return charCode - 48; // 0-9
@@ -760,7 +771,11 @@ export function bytesToString(bytes: Uint8Array): string {
   return str;
 }
 
-export function hashReverse(h: any): string {
+// h 要是hash字符串
+export function hashReverse(h: string): string {
+  if (typeof h !== "string" || h.length !== 64) {
+    return "";
+  }
   let s = "";
   for (let i = 0; i < 64; i += 2) {
     s = h.charAt(i) + h.charAt(i + 1) + s;
@@ -852,8 +867,9 @@ export function bytesToHex2(bytes: Uint8Array): string {
   return hex.join("");
 }
 
-export function bin2hex(str:string) {
-  let hex = "",num;
+export function bin2hex(str: string) {
+  let hex = "",
+    num;
   str = padLeft(str, 4);
   for (let i = str.length; i >= 4; i -= 4) {
     num = parseInt(str.slice(i - 4, i), 2);
@@ -865,7 +881,7 @@ export function bin2hex(str:string) {
   return hex;
 }
 
-export function padLeft(str:string, bits:number) {
+export function padLeft(str: string, bits: number) {
   /*
   bits: 8, // default number of bits
 	radix: 16, // work with HEX by default
@@ -882,6 +898,14 @@ export function padLeft(str:string, bits:number) {
 
 
 // --- msgTools.ts ---
+
+
+
+
+
+
+
+
 
 export class MsgT {
   version: number;
@@ -1164,6 +1188,52 @@ export class MsgT {
     return sum;
   }
 }
+
+
+// --- address.ts ---
+
+
+
+
+/**
+ * Decode a Base58Check address string.
+ * Validates checksum (double SHA-256) and returns the first 21 bytes
+ * [version(1) + hash160(20)].
+ */
+export class Address {
+  static decodeString(address: string): Uint8Array {
+    const bytes = Uint8Array.from(base58.decode(address));
+    if (bytes.length < 25) {
+      throw new Error("Invalid address length: " + address);
+    }
+
+    const hash = bytes.slice(0, 21);
+    const checksum = nobleSha256(nobleSha256(hash));
+    if (
+      checksum[0] !== bytes[21] ||
+      checksum[1] !== bytes[22] ||
+      checksum[2] !== bytes[23] ||
+      checksum[3] !== bytes[24]
+    ) {
+      throw new Error("Checksum validation failed! " + address);
+    }
+
+    return hash;
+  }
+
+  static toPkScript(address: string): string {
+    const hash = Address.decodeString(address);
+    //TODO: support crosschain
+
+    const op =
+      hash[0] == 0 || hash[0] == 0x6f ? 0x41 : hash[0] == 0x78 ? 0x43 : 0x42;
+    const adb = new Uint8Array([...hash, op, 0, 0, 0]);
+    const pkScript = bytesToHex2(adb);
+    return pkScript;
+  }
+}
+
+// export default Address;
 
 
 `;

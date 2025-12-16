@@ -103,7 +103,7 @@ export async function runContractMethod(
 
     // Execute
     addLog(`Running method '${methodName}'...`, LogLevel.INFO);
-    await executeJS(jsCode, methodName, args);
+    return await executeJS(jsCode, methodName, args);
     // addLog("Execution finished", LogLevel.SUCCESS);
   } catch (e: any) {
     addLog(`Error: ${e.message}`, LogLevel.ERROR);
@@ -169,6 +169,7 @@ const executeJS = async (code: string, methodName: string, args: any[]) => {
         const result = await exports[methodName](...args);
         if (result !== undefined) {
           addLog(`TS Result: ${formatArgs([result])}`, LogLevel.SUCCESS);
+          return result;
         } else {
           addLog(
             `TS Method '${methodName}' executed successfully (no return value)`,
@@ -199,6 +200,7 @@ const executeJS = async (code: string, methodName: string, args: any[]) => {
           const result = await exports.default[methodName](...args);
           if (result !== undefined) {
             addLog(`TS Result: ${formatArgs([result])}`, LogLevel.SUCCESS);
+            return result;
           }
         }
       }

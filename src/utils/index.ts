@@ -62,7 +62,11 @@ export function bytesToString(bytes: Uint8Array): string {
   return str;
 }
 
-export function hashReverse(h: any): string {
+// h 要是hash字符串
+export function hashReverse(h: string): string {
+  if (typeof h !== "string" || h.length !== 64) {
+    return "";
+  }
   let s = "";
   for (let i = 0; i < 64; i += 2) {
     s = h.charAt(i) + h.charAt(i + 1) + s;
@@ -154,8 +158,9 @@ export function bytesToHex2(bytes: Uint8Array): string {
   return hex.join("");
 }
 
-export function bin2hex(str:string) {
-  let hex = "",num;
+export function bin2hex(str: string) {
+  let hex = "",
+    num;
   str = padLeft(str, 4);
   for (let i = str.length; i >= 4; i -= 4) {
     num = parseInt(str.slice(i - 4, i), 2);
@@ -167,7 +172,7 @@ export function bin2hex(str:string) {
   return hex;
 }
 
-export function padLeft(str:string, bits:number) {
+export function padLeft(str: string, bits: number) {
   /*
   bits: 8, // default number of bits
 	radix: 16, // work with HEX by default

@@ -9,6 +9,7 @@ const FILES = [
   "defs.ts",
   "index.ts",
   "msgTools.ts",
+  "address.ts",
 ];
 
 const EXTERNAL_IMPORTS = new Set<string>();
@@ -24,7 +25,10 @@ FILES.forEach((file) => {
   let fileContent = fs.readFileSync(filePath, "utf-8");
 
   // Remove imports
-  fileContent = fileContent.replace(/^import .* from ['"]\..*['"];?\s*$/gm, "");
+  fileContent = fileContent.replace(
+    /import\s+[\s\S]*?\s+from\s+['"](?:\.|@).*['"];?/gm,
+    ""
+  );
   fileContent = fileContent.replace(
     /^import .* from ['"]@noble.*['"];?\s*$/gm,
     ""
