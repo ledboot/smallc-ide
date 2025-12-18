@@ -1,19 +1,50 @@
 // 使用 crypto-js 统一实现哈希功能
 import CryptoJS from 'crypto-js';
 
-
-
 // 操作码映射表
 const stringToOp: Record<string, string> = {
-  "EVAL8 ": 'A', "EVAL16 ": 'B', "EVAL32 ": 'C', "EVAL64 ": 'D', "EVAL256 ": 'E', "CONV ": 'F', "HASH ": 'G',
-  "HASH160 ": 'H', "SIGCHECK ": 'I', "IF ": 'K', "CALL ": 'L', "EXEC ": 'M', "LOAD ": 'N',
-  "STORE ": 'O', "DEL ": 'P', "LIBLOAD ": 'Q', "MALLOC ": 'R', "ALLOC ": 'S', "COPY ": 'T', "COPYIMM ": 'U',
-  "SELFDESTRUCT": 'W', "REVERT": 'X', "RETURN": 'Y',
-  "RECEIVED ": 'a', "TXFEE ": 'b', "GETCOIN ": 'c', "NOP": 'd', "SPEND ": 'e', "ADDDEF ": 'f', "ADDTXOUT ": 'g',
-  "GETDEFINITION ": 'h', "GETUTXO ": 'i', "MINT ": 'j', "META ": 'k', "TIME ": 'l', "HEIGHT ": 'm', "TXIOCOUNT": 'n', 
-  "VERSION": 'o', 'TOKENCONTRACT': 'p', 'LOG': 'q', "STOP": 'z'
+  'EVAL8 ': 'A',
+  'EVAL16 ': 'B',
+  'EVAL32 ': 'C',
+  'EVAL64 ': 'D',
+  'EVAL256 ': 'E',
+  'CONV ': 'F',
+  'HASH ': 'G',
+  'HASH160 ': 'H',
+  'SIGCHECK ': 'I',
+  'IF ': 'K',
+  'CALL ': 'L',
+  'EXEC ': 'M',
+  'LOAD ': 'N',
+  'STORE ': 'O',
+  'DEL ': 'P',
+  'LIBLOAD ': 'Q',
+  'MALLOC ': 'R',
+  'ALLOC ': 'S',
+  'COPY ': 'T',
+  'COPYIMM ': 'U',
+  SELFDESTRUCT: 'W',
+  REVERT: 'X',
+  RETURN: 'Y',
+  'RECEIVED ': 'a',
+  'TXFEE ': 'b',
+  'GETCOIN ': 'c',
+  NOP: 'd',
+  'SPEND ': 'e',
+  'ADDDEF ': 'f',
+  'ADDTXOUT ': 'g',
+  'GETDEFINITION ': 'h',
+  'GETUTXO ': 'i',
+  'MINT ': 'j',
+  'META ': 'k',
+  'TIME ': 'l',
+  'HEIGHT ': 'm',
+  TXIOCOUNT: 'n',
+  VERSION: 'o',
+  TOKENCONTRACT: 'p',
+  LOG: 'q',
+  STOP: 'z',
 };
-
 
 interface DebugInfo {
   code?: string;
@@ -47,7 +78,7 @@ export class Asm {
       const lines = code.split('\n');
       const defs: Record<string, string> = {};
       let ln = 0;
-      let processedCode = "";
+      let processedCode = '';
       const debug: DebugInfo[] = [];
       let globvar: DebugInfo | null = null;
       let pdinfo: DebugInfo | null = null;
@@ -61,7 +92,7 @@ export class Asm {
         if (debugMatch) {
           try {
             const dinfo: DebugInfo = JSON.parse(line.substring(2));
-            
+
             if (dinfo.code !== undefined) {
               if (pdinfo) {
                 debug.push(pdinfo);
@@ -69,19 +100,24 @@ export class Asm {
                   globvar = pdinfo;
                 }
               }
-              dinfo.begin = ln - (defs["BODY"] ? parseInt(defs["BODY"]) : 0);
+              dinfo.begin = ln - (defs['BODY'] ? parseInt(defs['BODY']) : 0);
               dinfo.lines = [];
               pdinfo = dinfo;
             } else if (dinfo.endcode !== undefined) {
               if (pdinfo) {
-                pdinfo.end = ln - (defs["BODY"] ? parseInt(defs["BODY"]) : 0);
+                pdinfo.end = ln - (defs['BODY'] ? parseInt(defs['BODY']) : 0);
               }
             } else if (dinfo.srcline !== undefined) {
               if (pdinfo) {
-                const matched = pdinfo.lines?.some(rec => rec[1] === dinfo.srcline);
+                const matched = pdinfo.lines?.some(
+                  rec => rec[1] === dinfo.srcline,
+                );
                 if (!matched) {
                   pdinfo.lines = pdinfo.lines || [];
-                  pdinfo.lines.push([ln - (defs["BODY"] ? parseInt(defs["BODY"]) : 0), dinfo.srcline]);
+                  pdinfo.lines.push([
+                    ln - (defs['BODY'] ? parseInt(defs['BODY']) : 0),
+                    dinfo.srcline,
+                  ]);
                 }
               }
             }
@@ -108,36 +144,38 @@ export class Asm {
         // 处理define语句
         const defineMatch = line.match(/^define\s+(.*)$/);
         if (defineMatch) {
-          const parts = defineMatch[1].split(' ');
+          const parts = defineMatch[1]!.split(' ');
           if (parts.length >= 2) {
             const lastIndex = parts.length - 1;
-            if (parts[lastIndex] === ".") {
+            if (parts[lastIndex] === '.') {
               parts[lastIndex] = ln.toString();
             }
-            defs[parts[0]] = parts[lastIndex];
+            defs[parts[0]!] = parts[lastIndex]!;
           }
           continue;
         }
 
         ln++;
-        processedCode += line + "\n";
+        processedCode += line + '\n';
       }
 
       if (pdinfo) {
         debug.push(pdinfo);
-        if (debug.length > 0) {
+        if (debug[0]) {
           debug[0].end = pdinfo.end;
-          debug[0].body = defs["BODY"] ? parseInt(defs["BODY"]) : 0;
+          debug[0].body = defs['BODY'] ? parseInt(defs['BODY']) : 0;
         }
       }
 
       // 按长度排序definitions（长的优先替换）
-      const sortedDefs = Object.entries(defs).sort((a, b) => b[0].length - a[0].length);
+      const sortedDefs = Object.entries(defs).sort(
+        (a, b) => b[0].length - a[0].length,
+      );
 
       // 第二遍处理：替换操作码、字符串和相对地址
       const codeLines = processedCode.split('\n');
       ln = 0;
-      let objectCode = "";
+      let objectCode = '';
 
       for (let line of codeLines) {
         if (!line.trim()) continue;
@@ -149,14 +187,17 @@ export class Asm {
 
         // 替换definitions
         for (const [key, value] of sortedDefs) {
-          line = line.replace(new RegExp(`\\b${this.escapeRegExp(key)}\\b`, 'g'), value);
+          line = line.replace(
+            new RegExp(`\\b${this.escapeRegExp(key)}\\b`, 'g'),
+            value,
+          );
         }
 
         // 处理相对地址
         line = this.processRelativeAddresses(line, ln);
 
         ln++;
-        objectCode += line + "\n";
+        objectCode += line + '\n';
       }
 
       // 生成最终输出
@@ -169,17 +210,16 @@ export class Asm {
         hash: hash,
         objectCode: cleanObjectCode,
         debugInfo: JSON.stringify(debug),
-        success: true
+        success: true,
       };
-
     } catch (error) {
       return {
-        bytecode: "",
-        hash: "",
-        objectCode: "",
-        debugInfo: "",
+        bytecode: '',
+        hash: '',
+        objectCode: '',
+        debugInfo: '',
         success: false,
-        error: error instanceof Error ? error.message : String(error)
+        error: error instanceof Error ? error.message : String(error),
       };
     }
   }
@@ -190,16 +230,20 @@ export class Asm {
   private static processAbiFunctions(line: string): string {
     // 处理 abi("string") 函数
     line = line.replace(/abi\("([^"]*)"\)/g, (match, str) => {
-      const hash = CryptoJS.SHA256(String(str ?? '')).toString(CryptoJS.enc.Hex);
-      return "x" + hash.substring(0, 8);
+      const hash = CryptoJS.SHA256(String(str ?? '')).toString(
+        CryptoJS.enc.Hex,
+      );
+      return 'x' + hash.substring(0, 8);
     });
 
     // 处理 ABI("string") 函数
     line = line.replace(/ABI\("([^"]*)"\)/g, (match, str) => {
-      const hash = CryptoJS.SHA256(String(str ?? '')).toString(CryptoJS.enc.Hex);
+      const hash = CryptoJS.SHA256(String(str ?? '')).toString(
+        CryptoJS.enc.Hex,
+      );
       let x = hash.substring(0, 8);
-      if (x === "00000000") x = "00000001";
-      return "x" + x + "00000000";
+      if (x === '00000000') x = '00000001';
+      return 'x' + x + '00000000';
     });
 
     return line;
@@ -208,9 +252,13 @@ export class Asm {
   /**
    * 处理变量替换
    */
-  private static processVariables(line: string, pdinfo: DebugInfo | null, globvar: DebugInfo | null): string {
+  private static processVariables(
+    line: string,
+    pdinfo: DebugInfo | null,
+    globvar: DebugInfo | null,
+  ): string {
     const variableRegex = /\\([0-9a-z_]+),/gi;
-    
+
     return line.replace(variableRegex, (match, varName) => {
       let varloc = this.hasvar(pdinfo, varName);
       if (!varloc && globvar) {
@@ -227,7 +275,10 @@ export class Asm {
   /**
    * 查找变量位置
    */
-  private static hasvar(info: DebugInfo | null, varName: string): string | null {
+  private static hasvar(
+    info: DebugInfo | null,
+    varName: string,
+  ): string | null {
     if (!info?.vars) return null;
     for (const varObj of info.vars) {
       if (typeof varObj === 'object' && varObj !== null && varName in varObj) {
@@ -266,12 +317,15 @@ export class Asm {
   /**
    * 处理相对地址
    */
-  private static processRelativeAddresses(line: string, currentLine: number): string {
+  private static processRelativeAddresses(
+    line: string,
+    currentLine: number,
+  ): string {
     return line.replace(/\.([0-9]+)/g, (match, target) => {
       const targetLine = parseInt(target);
       const dist = targetLine - currentLine;
       if (dist < 0) {
-        return "n" + (-dist);
+        return 'n' + -dist;
       }
       return dist.toString();
     });
@@ -289,7 +343,9 @@ export class Asm {
    * 生成哈希
    */
   private static generateHash(bytecode: string): string {
-    return CryptoJS.RIPEMD160(CryptoJS.enc.Hex.parse(bytecode)).toString(CryptoJS.enc.Hex);
+    return CryptoJS.RIPEMD160(CryptoJS.enc.Hex.parse(bytecode)).toString(
+      CryptoJS.enc.Hex,
+    );
   }
 
   /**
@@ -302,36 +358,40 @@ export class Asm {
   /**
    * 验证ASM代码语法
    */
-  public static validateSyntax(code: string): { valid: boolean; errors: string[] } {
+  public static validateSyntax(code: string): {
+    valid: boolean;
+    errors: string[];
+  } {
     const errors: string[] = [];
     const lines = code.split('\n');
-
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i].trim();
+    let lineNumber = 0;
+    for (const lineRaw of lines) {
+      const line = lineRaw.trim();
+      lineNumber++;
       if (!line || line.startsWith(';')) continue;
 
       // 检查基本语法错误
       if (line.includes('\\') && !line.match(/\\[0-9a-z_]+,/i)) {
-        errors.push(`Line ${i + 1}: Invalid variable syntax`);
+        errors.push(`Line ${lineNumber}: Invalid variable syntax`);
       }
 
       // 检查引号匹配
       const quotes = line.match(/"/g);
       if (quotes && quotes.length % 2 !== 0) {
-        errors.push(`Line ${i + 1}: Unmatched quotes`);
+        errors.push(`Line ${lineNumber}: Unmatched quotes`);
       }
 
       // 检查括号匹配
       const openParens = (line.match(/\(/g) || []).length;
       const closeParens = (line.match(/\)/g) || []).length;
       if (openParens !== closeParens) {
-        errors.push(`Line ${i + 1}: Unmatched parentheses`);
+        errors.push(`Line ${lineNumber}: Unmatched parentheses`);
       }
     }
 
     return {
       valid: errors.length === 0,
-      errors
+      errors,
     };
   }
 
@@ -352,7 +412,10 @@ export class Asm {
       .map(line => {
         line = line.trim();
         // 为标签和指令添加适当的缩进
-        if (line.startsWith('define ') || line.match(/^[a-zA-Z_][a-zA-Z0-9_]*:$/)) {
+        if (
+          line.startsWith('define ') ||
+          line.match(/^[a-zA-Z_][a-zA-Z0-9_]*:$/)
+        ) {
           return line;
         } else if (line && !line.startsWith(';')) {
           return '  ' + line;
@@ -363,4 +426,4 @@ export class Asm {
   }
 }
 
-export default Asm; 
+export default Asm;

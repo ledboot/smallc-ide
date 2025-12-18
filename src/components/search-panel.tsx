@@ -1,67 +1,67 @@
-"use client"
+'use client';
 
-import { useState } from "react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Checkbox } from "@/components/ui/checkbox"
-import { SearchIcon, ReplaceIcon, FileIcon } from "lucide-react"
-import type { FileType } from "@/lib/types"
+import {useState} from 'react';
+import {Button} from '@/components/ui/button';
+import {Input} from '@/components/ui/input';
+import {Label} from '@/components/ui/label';
+import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card';
+import {Badge} from '@/components/ui/badge';
+import {Checkbox} from '@/components/ui/checkbox';
+import {SearchIcon, ReplaceIcon, FileIcon} from 'lucide-react';
+import type {FileType} from '@/lib/types';
 
 interface SearchPanelProps {
-  files: FileType[]
-  onFileSelect: (file: FileType) => void
+  files: FileType[];
+  onFileSelect: (file: FileType) => void;
 }
 
 interface SearchResult {
-  file: FileType
-  line: number
-  column: number
-  text: string
-  match: string
+  file: FileType;
+  line: number;
+  column: number;
+  text: string;
+  match: string;
 }
 
-export default function SearchPanel({ files, onFileSelect }: SearchPanelProps) {
-  const [searchQuery, setSearchQuery] = useState("")
-  const [replaceQuery, setReplaceQuery] = useState("")
-  const [caseSensitive, setCaseSensitive] = useState(false)
-  const [wholeWord, setWholeWord] = useState(false)
-  const [useRegex, setUseRegex] = useState(false)
-  const [searchResults, setSearchResults] = useState<SearchResult[]>([])
-  const [isSearching, setIsSearching] = useState(false)
+export default function SearchPanel({files, onFileSelect}: SearchPanelProps) {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [replaceQuery, setReplaceQuery] = useState('');
+  const [caseSensitive, setCaseSensitive] = useState(false);
+  const [wholeWord, setWholeWord] = useState(false);
+  const [useRegex, setUseRegex] = useState(false);
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
 
   const handleSearch = async () => {
-    if (!searchQuery.trim()) return
+    if (!searchQuery.trim()) return;
 
-    setIsSearching(true)
-    setSearchResults([])
+    setIsSearching(true);
+    setSearchResults([]);
 
     // Simulate search delay
-    await new Promise((resolve) => setTimeout(resolve, 500))
+    await new Promise(resolve => setTimeout(resolve, 500));
 
-    const results: SearchResult[] = []
+    const results: SearchResult[] = [];
 
-    files.forEach((file) => {
-      const lines = file.content.split("\n")
+    files.forEach(file => {
+      const lines = file.content.split('\n');
       lines.forEach((line, lineIndex) => {
-        let searchPattern = searchQuery
-        let flags = "g"
+        let searchPattern = searchQuery;
+        let flags = 'g';
 
-        if (!caseSensitive) flags += "i"
+        if (!caseSensitive) flags += 'i';
 
         if (!useRegex) {
-          searchPattern = searchPattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+          searchPattern = searchPattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         }
 
         if (wholeWord) {
-          searchPattern = `\\b${searchPattern}\\b`
+          searchPattern = `\\b${searchPattern}\\b`;
         }
 
         try {
-          const regex = new RegExp(searchPattern, flags)
-          let match
+          const regex = new RegExp(searchPattern, flags);
+          let match;
 
           while ((match = regex.exec(line)) !== null) {
             results.push({
@@ -70,25 +70,25 @@ export default function SearchPanel({ files, onFileSelect }: SearchPanelProps) {
               column: match.index + 1,
               text: line.trim(),
               match: match[0],
-            })
+            });
 
-            if (!regex.global) break
+            if (!regex.global) break;
           }
         } catch (e) {
           // Invalid regex, skip
-          console.error(e)
+          console.error(e);
         }
-      })
-    })
+      });
+    });
 
-    setSearchResults(results)
-    setIsSearching(false)
-  }
+    setSearchResults(results);
+    setIsSearching(false);
+  };
 
   const handleResultClick = (result: SearchResult) => {
-    onFileSelect(result.file)
+    onFileSelect(result.file);
     // In a real implementation, you would also scroll to the specific line
-  }
+  };
 
   return (
     <div className="flex h-full flex-col p-4 space-y-4">
@@ -109,9 +109,9 @@ export default function SearchPanel({ files, onFileSelect }: SearchPanelProps) {
                 id="search"
                 placeholder="Search in files..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") handleSearch()
+                onChange={e => setSearchQuery(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') handleSearch();
                 }}
               />
               <Button onClick={handleSearch} disabled={isSearching}>
@@ -127,7 +127,7 @@ export default function SearchPanel({ files, onFileSelect }: SearchPanelProps) {
                 id="replace"
                 placeholder="Replace with..."
                 value={replaceQuery}
-                onChange={(e) => setReplaceQuery(e.target.value)}
+                onChange={e => setReplaceQuery(e.target.value)}
               />
               <Button variant="outline" disabled>
                 <ReplaceIcon className="h-4 w-4" />
@@ -140,7 +140,9 @@ export default function SearchPanel({ files, onFileSelect }: SearchPanelProps) {
               <Checkbox
                 id="caseSensitive"
                 checked={caseSensitive}
-                onCheckedChange={(checked) => setCaseSensitive(checked as boolean)}
+                onCheckedChange={checked =>
+                  setCaseSensitive(checked as boolean)
+                }
               />
               <Label htmlFor="caseSensitive" className="text-sm">
                 Match Case
@@ -150,7 +152,7 @@ export default function SearchPanel({ files, onFileSelect }: SearchPanelProps) {
               <Checkbox
                 id="wholeWord"
                 checked={wholeWord}
-                onCheckedChange={(checked) => setWholeWord(checked as boolean)}
+                onCheckedChange={checked => setWholeWord(checked as boolean)}
               />
               <Label htmlFor="wholeWord" className="text-sm">
                 Whole Word
@@ -160,7 +162,7 @@ export default function SearchPanel({ files, onFileSelect }: SearchPanelProps) {
               <Checkbox
                 id="useRegex"
                 checked={useRegex}
-                onCheckedChange={(checked) => setUseRegex(checked as boolean)}
+                onCheckedChange={checked => setUseRegex(checked as boolean)}
               />
               <Label htmlFor="useRegex" className="text-sm">
                 Use Regular Expression
@@ -195,7 +197,9 @@ export default function SearchPanel({ files, onFileSelect }: SearchPanelProps) {
                       {result.line}:{result.column}
                     </span>
                   </div>
-                  <div className="font-mono text-xs text-muted-foreground pl-5">{result.text}</div>
+                  <div className="font-mono text-xs text-muted-foreground pl-5">
+                    {result.text}
+                  </div>
                 </div>
               ))}
             </div>
@@ -203,7 +207,11 @@ export default function SearchPanel({ files, onFileSelect }: SearchPanelProps) {
         </Card>
       )}
 
-      {isSearching && <div className="text-center text-sm text-muted-foreground">Searching...</div>}
+      {isSearching && (
+        <div className="text-center text-sm text-muted-foreground">
+          Searching...
+        </div>
+      )}
     </div>
-  )
+  );
 }

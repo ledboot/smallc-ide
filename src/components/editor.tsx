@@ -1,10 +1,10 @@
-"use client";
+'use client';
 
-import { useEffect, useRef } from "react";
-import type { Breakpoint, CompiledResult, FileType } from "@/lib/types";
-import { saveFile } from "@/lib/db";
-import { Editor as MonacoEditor } from "@monaco-editor/react";
-import * as monaco from "monaco-editor";
+import {useEffect, useRef} from 'react';
+import type {Breakpoint, CompiledResult, FileType} from '@/lib/types';
+import {saveFile} from '@/lib/db';
+import {Editor as MonacoEditor} from '@monaco-editor/react';
+import * as monaco from 'monaco-editor';
 
 interface EditorProps {
   file: FileType;
@@ -27,31 +27,32 @@ export default function Editor({
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<typeof monaco | null>(null);
 
-  const getLanguage = (fileName: string) => {
-    if (fileName.endsWith(".sol")) return "sol";
-    if (fileName.endsWith(".c")) return "c";
+  const getLanguage = (fileName: string, id: string) => {
+    if (id === 'home') return 'plaintext';
+    if (fileName.endsWith('.sol')) return 'sol';
+    if (fileName.endsWith('.c')) return 'c';
     if (
-      fileName.endsWith(".cpp") ||
-      fileName.endsWith(".cc") ||
-      fileName.endsWith(".cxx")
+      fileName.endsWith('.cpp') ||
+      fileName.endsWith('.cc') ||
+      fileName.endsWith('.cxx')
     )
-      return "cpp";
-    if (fileName.endsWith(".h") || fileName.endsWith(".hpp")) return "cpp";
-    if (fileName.endsWith(".js")) return "javascript";
-    if (fileName.endsWith(".json")) return "json";
-    if (fileName.endsWith(".ts")) return "typescript";
-    return "plaintext";
+      return 'cpp';
+    if (fileName.endsWith('.h') || fileName.endsWith('.hpp')) return 'cpp';
+    if (fileName.endsWith('.js')) return 'javascript';
+    if (fileName.endsWith('.json')) return 'json';
+    if (fileName.endsWith('.ts')) return 'typescript';
+    return 'plaintext';
   };
 
   const handleEditorDidMount = (
     editor: monaco.editor.IStandaloneCodeEditor,
-    monacoInstance: typeof monaco
+    monacoInstance: typeof monaco,
   ) => {
     editorRef.current = editor;
     monacoRef.current = monacoInstance;
 
     // Set global instance for runner access
-    import("@/lib/monaco-instance").then(({ setMonacoInstance }) => {
+    import('@/lib/monaco-instance').then(({setMonacoInstance}) => {
       setMonacoInstance(monacoInstance, editor);
     });
 
@@ -72,7 +73,7 @@ export default function Editor({
         export = bigInt;
       }
       `,
-      "file:///node_modules/@types/external-libs/index.d.ts"
+      'file:///node_modules/@types/external-libs/index.d.ts',
     );
 
     const setupBreakpoints = () => {
@@ -82,19 +83,19 @@ export default function Editor({
       // Set breakpoints from file
       if (file.breakpoints?.length) {
         const breakpoints = file.breakpoints.filter(
-          (bp) => bp.lineNumber > 0 && bp.lineNumber <= model.getLineCount()
+          bp => bp.lineNumber > 0 && bp.lineNumber <= model.getLineCount(),
         );
 
         // Add breakpoint decorations for valid breakpoints
-        const decorations = breakpoints.map((bp) => ({
+        const decorations = breakpoints.map(bp => ({
           range: new monaco.Range(bp.lineNumber, 1, bp.lineNumber, 1),
           options: {
             isWholeLine: false,
             glyphMarginClassName: `breakpoint-glyph ${
-              bp.enabled === false ? "breakpoint-disabled" : ""
+              bp.enabled === false ? 'breakpoint-disabled' : ''
             }`,
             glyphMarginHoverMessage: bp.condition
-              ? { value: `Condition: ${bp.condition}` }
+              ? {value: `Condition: ${bp.condition}`}
               : undefined,
             stickiness: 1 /* NeverGrowsWhenTypingAtEdges */,
           },
@@ -110,7 +111,7 @@ export default function Editor({
     setupBreakpoints();
 
     // Handle gutter clicks for breakpoints
-    editor.onMouseDown(async (e) => {
+    editor.onMouseDown(async e => {
       if (
         !e.target ||
         e.target.type !== monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN
@@ -127,8 +128,8 @@ export default function Editor({
 
       // Toggle breakpoint
       const decorations = editor.getLineDecorations(lineNumber) || [];
-      const existingBreakpoint = decorations.find((d) =>
-        d.options.glyphMarginClassName?.includes("breakpoint-glyph")
+      const existingBreakpoint = decorations.find(d =>
+        d.options.glyphMarginClassName?.includes('breakpoint-glyph'),
       );
 
       try {
@@ -145,18 +146,18 @@ export default function Editor({
                 range,
                 options: {
                   isWholeLine: false,
-                  glyphMarginClassName: "breakpoint-glyph",
+                  glyphMarginClassName: 'breakpoint-glyph',
                   stickiness: 1 /* NeverGrowsWhenTypingAtEdges */,
                 },
               },
-            ]
+            ],
           );
         }
 
         // Trigger breakpoint change handler
         handleBreakpointChange();
       } catch (error) {
-        console.error("Error toggling breakpoint:", error);
+        console.error('Error toggling breakpoint:', error);
       }
     });
 
@@ -206,16 +207,16 @@ export default function Editor({
       if (!model) return;
 
       const decorations = model.getAllDecorations();
-      const breakpointDecorations = decorations.filter((d) =>
-        d.options.glyphMarginClassName?.includes("breakpoint-glyph")
+      const breakpointDecorations = decorations.filter(d =>
+        d.options.glyphMarginClassName?.includes('breakpoint-glyph'),
       );
 
       const breakpoints: Breakpoint[] = [];
-      console.log("breakpointDecorations", breakpointDecorations);
+      console.log('breakpointDecorations', breakpointDecorations);
 
       for (const d of breakpointDecorations) {
         const lineNumber = d.range.startLineNumber;
-        const lineContent = model.getLineContent(lineNumber) || "";
+        const lineContent = model.getLineContent(lineNumber) || '';
 
         // Skip invalid line numbers or empty lines
         if (
@@ -244,7 +245,7 @@ export default function Editor({
             lineNumber,
             startColumn,
             lineNumber,
-            endColumn
+            endColumn,
           );
           editorRef.current.deltaDecorations(
             [d.id],
@@ -253,7 +254,7 @@ export default function Editor({
                 range: newRange,
                 options: d.options,
               },
-            ]
+            ],
           );
         }
 
@@ -261,26 +262,26 @@ export default function Editor({
         breakpoints.push({
           lineNumber,
           enabled: !d.options.glyphMarginClassName?.includes(
-            "breakpoint-disabled"
+            'breakpoint-disabled',
           ),
           condition:
-            typeof d.options.glyphMarginHoverMessage === "object" &&
+            typeof d.options.glyphMarginHoverMessage === 'object' &&
             d.options.glyphMarginHoverMessage &&
-            "value" in d.options.glyphMarginHoverMessage
+            'value' in d.options.glyphMarginHoverMessage
               ? String(d.options.glyphMarginHoverMessage.value).replace(
-                  "Condition: ",
-                  ""
+                  'Condition: ',
+                  '',
                 )
               : undefined,
         });
       }
 
-      console.log("breakpoints", breakpoints);
+      console.log('breakpoints', breakpoints);
 
       // Update file.breakpoints if we have valid breakpoints
       file.breakpoints = [...breakpoints];
     } catch (error) {
-      console.error("Error handling breakpoint change:", error);
+      console.error('Error handling breakpoint change:', error);
     }
   };
 
@@ -298,7 +299,7 @@ export default function Editor({
       const validLineNumber = Math.max(1, Math.min(currentLine, lineCount));
       if (validLineNumber > lineCount) return;
 
-      const lineContent = model.getLineContent(validLineNumber) || "";
+      const lineContent = model.getLineContent(validLineNumber) || '';
       const lineLength = Math.max(1, lineContent.length);
 
       const decorations = editorRef.current.deltaDecorations(
@@ -309,16 +310,16 @@ export default function Editor({
               validLineNumber,
               1,
               validLineNumber,
-              lineLength
+              lineLength,
             ),
             options: {
               isWholeLine: true,
-              className: "current-line",
-              glyphMarginClassName: "current-line-glyph",
+              className: 'current-line',
+              glyphMarginClassName: 'current-line-glyph',
               stickiness: 1 /* NeverGrowsWhenTypingAtEdges */,
             },
           },
-        ]
+        ],
       );
 
       return () => {
@@ -326,12 +327,12 @@ export default function Editor({
           try {
             editorRef.current.deltaDecorations(decorations, []);
           } catch (error) {
-            console.error("Error cleaning up current line decorations:", error);
+            console.error('Error cleaning up current line decorations:', error);
           }
         }
       };
     } catch (error) {
-      console.error("Error updating current line highlight:", error);
+      console.error('Error updating current line highlight:', error);
     }
   }, [currentLine]);
 
@@ -339,40 +340,48 @@ export default function Editor({
     <div className="h-full w-full">
       <MonacoEditor
         height="100%"
-        language={getLanguage(file.name)}
+        path={file.id}
+        language={getLanguage(file.name, file.id)}
         value={file.content}
         onChange={handleEditorChange}
         onMount={handleEditorDidMount}
         theme="github-light"
         options={{
+          readOnly: file.id === 'home',
+          // Disable syntax checking for home tab
+          quickSuggestions: file.id !== 'home',
+          suggestOnTriggerCharacters: file.id !== 'home',
+          parameterHints: {enabled: file.id !== 'home'},
+          codeLens: file.id !== 'home',
+          lightbulb: {enabled: file.id !== 'home'},
           minimap: {
             enabled: true,
-            side: "right",
-            size: "proportional",
-            showSlider: "mouseover",
+            side: 'right',
+            size: 'proportional',
+            showSlider: 'mouseover',
             renderCharacters: true,
             maxColumn: 120,
             scale: 1,
           },
           fontSize: 14,
-          wordWrap: "on",
+          wordWrap: 'on',
           automaticLayout: true,
           tabSize: 2,
-          glyphMargin: true,
+          glyphMargin: file.id !== 'home',
           lineNumbersMinChars: 3,
           folding: true,
           lineDecorationsWidth: 10,
-          lineNumbers: "on",
+          lineNumbers: file.id === 'home' ? 'off' : 'on',
           contextmenu: true,
           scrollBeyondLastLine: false,
-          renderLineHighlight: "line",
-          renderWhitespace: "selection",
-          guides: { indentation: true },
+          renderLineHighlight: 'line',
+          renderWhitespace: 'selection',
+          guides: {indentation: true},
           overviewRulerLanes: 3,
           overviewRulerBorder: true,
           scrollbar: {
-            vertical: "auto",
-            horizontal: "auto",
+            vertical: 'auto',
+            horizontal: 'auto',
             useShadows: true,
             verticalHasArrows: false,
             horizontalHasArrows: false,
@@ -382,46 +391,6 @@ export default function Editor({
           },
         }}
       />
-      <style jsx global>{`
-        .current-line {
-          background-color: rgba(38, 79, 120, 0.25);
-        }
-        .current-line-glyph {
-          background: #0d6efd;
-        }
-        .monaco-editor .breakpoint-glyph::before {
-          content: "";
-          display: block;
-          position: absolute;
-          width: 12px;
-          height: 12px;
-          background: #ff4d4f;
-          border: 1px solid #fff;
-          border-radius: 50%;
-          left: 50%;
-          top: 50%;
-          transform: translate(-50%, -50%);
-          box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.1);
-          transition: all 0.2s ease;
-        }
-
-        .monaco-editor .breakpoint-glyph:hover::before {
-          transform: translate(-50%, -50%) scale(1.1);
-          box-shadow: 0 0 0 2px rgba(255, 77, 79, 0.3);
-        }
-
-        .monaco-editor .breakpoint-disabled::before {
-          background: #d9d9d9;
-          border-color: #f5f5f5;
-          opacity: 0.7;
-        }
-        .monaco-editor .margin {
-          cursor: pointer;
-        }
-        .monaco-editor .line-numbers {
-          cursor: pointer;
-        }
-      `}</style>
     </div>
   );
 }

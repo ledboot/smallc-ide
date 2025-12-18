@@ -1,8 +1,8 @@
-import { sha256 as nobleSha256 } from '@noble/hashes/sha2.js';
+import {sha256 as nobleSha256} from '@noble/hashes/sha2.js';
 
-import { bytesToHex, bytesToString,hashReverse } from './index';
-import { Packer } from './packer';
-import { Reader } from './reader';
+import {bytesToHex, bytesToString, hashReverse} from './index';
+import {Packer} from './packer';
+import {Reader} from './reader';
 
 export class BorderDef {
   type: string;
@@ -41,7 +41,7 @@ export class BorderDef {
     const w = new Packer();
     this.write0(this, w);
     const h = nobleSha256(w.Bytes());
-    h[0] &= 0xfe;
+    if (h[0] !== undefined) h[0] &= 0xfe;
     return hashReverse(bytesToHex(h));
   }
 
@@ -77,8 +77,7 @@ export class PolygonDef {
     for (let i = 0; i < this.Loops.length; i++) {
       const loop = this.Loops[i];
       w.WriteVarInt(loop.length);
-      for (let j = 0; j < loop.length; j++)
-        w.PackHs(hashReverse(loop[j]));
+      for (let j = 0; j < loop.length; j++) w.PackHs(hashReverse(loop[j]));
     }
     return w.Bytes();
   }
@@ -88,12 +87,11 @@ export class PolygonDef {
 
     for (let i = 0; i < this.Loops.length; i++) {
       const loop = this.Loops[i];
-      for (let j = 0; j < loop.length; j++)
-        w.PackHs(hashReverse(loop[j]));
+      for (let j = 0; j < loop.length; j++) w.PackHs(hashReverse(loop[j]));
     }
 
     const h = nobleSha256(w.Bytes());
-    return hashReverse(h);
+    return hashReverse(bytesToHex(h));
   }
 
   data() {
@@ -129,7 +127,7 @@ export class VertexDef {
   }
 
   hashval() {
-    return hashReverse(this.write());
+    return hashReverse(bytesToHex(this.write()));
   }
 
   data() {
@@ -157,17 +155,18 @@ export class RightDef {
     const n = r.readVarInt();
     const s = r.read(Number(n));
     this.desc = bytesToString(s);
-    this.attrib = r.read(1)[0];
+    this.attrib = r.read(1)[0] ?? 0;
   }
   write() {
     const w = new Packer();
     w.PackC(4);
     w.PackHs(hashReverse(this.father));
     w.WriteVarInt(this.desc.length);
-    if (typeof this.desc == 'string') {
+    if (typeof this.desc === 'string') {
       const sp = this.desc.split('');
       for (let i = 0; i < sp.length; i++) {
-        sp[i] = String.fromCharCode(sp[i].charCodeAt(0));
+        const char = sp[i];
+        if (char !== undefined) sp[i] = String.fromCharCode(char.charCodeAt(0));
       }
       w.Merge(sp as any);
     } else w.Merge(this.desc);
@@ -178,17 +177,18 @@ export class RightDef {
   hashval() {
     const w = new Packer();
     w.PackHs(hashReverse(this.father));
-    if (typeof this.desc == 'string') {
+    if (typeof this.desc === 'string') {
       const sp = this.desc.split('');
       for (let i = 0; i < sp.length; i++) {
-        sp[i] = String.fromCharCode(sp[i].charCodeAt(0));
+        const char = sp[i];
+        if (char !== undefined) sp[i] = String.fromCharCode(char.charCodeAt(0));
       }
       w.Merge(sp as any);
     } else w.Merge(this.desc);
     w.PackC(this.attrib);
 
     const h = nobleSha256(w.Bytes());
-    return hashReverse(h);
+    return hashReverse(bytesToHex(h));
   }
 
   data() {
@@ -208,7 +208,7 @@ export class RightSetDef {
     this.rights = [];
   }
   data() {
-    return { rights: this.rights };
+    return {rights: this.rights};
   }
   read(r: Reader) {
     const n = r.readVarInt();
@@ -220,8 +220,11 @@ export class RightSetDef {
   write() {
     this.rights.sort((a, b) => {
       for (let k = 0; k < 32; k++) {
-        if (a[k] < b[k]) return -1;
-        if (a[k] > b[k]) return 1;
+        const ak = a[k];
+        const bk = b[k];
+        if (ak === undefined || bk === undefined) continue;
+        if (ak < bk) return -1;
+        if (ak > bk) return 1;
       }
       return 0;
     });
@@ -229,7 +232,8 @@ export class RightSetDef {
     const w = new Packer();
     w.WriteVarInt(this.rights.length);
     for (let i = 0; i < this.rights.length; i++) {
-      w.PackHs(hashReverse(this.rights[i]));
+      const right = this.rights[i];
+      if (right) w.PackHs(hashReverse(right));
     }
     return w.Bytes();
   }
@@ -237,19 +241,23 @@ export class RightSetDef {
   hashval() {
     this.rights.sort((a, b) => {
       for (let k = 0; k < 32; k++) {
-        if (a[k] < b[k]) return -1;
-        if (a[k] > b[k]) return 1;
+        const ak = a[k];
+        const bk = b[k];
+        if (ak === undefined || bk === undefined) continue;
+        if (ak < bk) return -1;
+        if (ak > bk) return 1;
       }
       return 0;
     });
 
     const w = new Packer();
     for (let i = 0; i < this.rights.length; i++) {
-      w.PackHs(hashReverse(this.rights[i]));
+      const right = this.rights[i];
+      if (right) w.PackHs(hashReverse(right));
     }
 
     const h = nobleSha256(w.Bytes());
-    return hashReverse(h);
+    return hashReverse(bytesToHex(h));
   }
 }
 
@@ -294,9 +302,7 @@ export class TinDef {
   }
   read(r: Reader) {
     this.previousOutPoint = r.readOutPoint();
-    this.previousOutPoint.hash = hashReverse(
-      this.previousOutPoint.hash
-    );
+    this.previousOutPoint.hash = hashReverse(this.previousOutPoint.hash);
     this.signatureIndex = r.readInt32();
     this.sequence = r.readInt32();
   }
@@ -349,7 +355,7 @@ export class ToutDef {
     if (discriminant >= 0xfd) {
       const bs = 1 << (discriminant - 0xfc);
       if (bs <= 4) {
-        this.tokenType = this.tokenType & BigInt(0xFFFFFFFF);
+        this.tokenType = this.tokenType & BigInt(0xffffffff);
       }
     }
 
@@ -373,7 +379,7 @@ export class ToutDef {
 
   write() {
     const w = new Packer();
-			
+
     w.WriteVarInt(this.tokenType);
 
     if (this.tokenType == BigInt(0xfc)) {
@@ -382,9 +388,9 @@ export class ToutDef {
     }
 
     if ((this.tokenType & 1n) == 0n) w.PackP(this.value);
-    else w.PackHs(hashReverse(this.value));
-    
-    if ((this.tokenType & 2n) != 0n)
+    else w.PackHs(hashReverse(this.value.toString(16).padStart(64, '0')));
+
+    if ((this.tokenType & 2n) != 0n && this.rights[0])
       w.PackHs(hashReverse(this.rights[0]));
     w.WriteVarInt(this.pkScript.length / 2);
     w.PackHs(this.pkScript);
@@ -395,5 +401,4 @@ export class ToutDef {
   isSeparator() {
     return this.tokenType == BigInt(0xfc);
   }
-
 }

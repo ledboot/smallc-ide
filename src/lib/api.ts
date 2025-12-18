@@ -1,5 +1,5 @@
-import axios, { AxiosInstance, AxiosHeaders } from "axios";
-import { ChainType, DebugCallType, CHAIN_INFO } from "@/constants";
+import axios, {type AxiosInstance, AxiosHeaders} from 'axios';
+import {ChainType, DebugCallType, CHAIN_INFO} from '@/constants';
 
 // Store client instances
 const clientInstances: Record<ChainType, RPCClient> = {} as Record<
@@ -18,7 +18,7 @@ class RPCClient {
     this.client = axios.create({
       baseURL: config.endpoints[0],
       headers: {
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
       },
     });
 
@@ -28,15 +28,15 @@ class RPCClient {
     const rpcPassword = config.rpcPassword;
 
     // Add request interceptor for auth
-    this.client.interceptors.request.use((config) => {
+    this.client.interceptors.request.use(config => {
       const headers = new AxiosHeaders({
         ...config.headers,
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
       });
 
       headers.set(
-        "Authorization",
-        `Basic ${Buffer.from(`${rpcUser}:${rpcPassword}`).toString("base64")}`
+        'Authorization',
+        `Basic ${Buffer.from(`${rpcUser}:${rpcPassword}`).toString('base64')}`,
       );
 
       return {
@@ -48,7 +48,7 @@ class RPCClient {
 
   // Get or create client instance for a specific chain
   public static getClient(
-    chainType: ChainType = ChainType.ZENT_TESTNET
+    chainType: ChainType = ChainType.ZENT_TESTNET,
   ): RPCClient {
     if (!clientInstances[chainType]) {
       clientInstances[chainType] = new RPCClient(chainType);
@@ -59,26 +59,26 @@ class RPCClient {
   // Generic RPC call
   async rpcCall(method: string, params: unknown[] = []) {
     try {
-      const response = await this.client.post("", {
-        jsonrpc: "1.0",
+      const response = await this.client.post('', {
+        jsonrpc: '1.0',
         method,
         params,
         id: this.sessionId++,
       });
-      console.log("response", response);
+      console.log('response', response);
       console.log(
-        "[rpcCall] method:",
+        '[rpcCall] method:',
         method,
-        " params:",
+        ' params:',
         params,
-        " response:",
-        response
+        ' response:',
+        response,
       );
       if (response.data && response.data.error) {
-        console.error("RPC error:", response.data.error);
-        throw new Error(response.data.error.message || "RPC call failed");
+        console.error('RPC error:', response.data.error);
+        throw new Error(response.data.error.message || 'RPC call failed');
       }
-      return response.data
+      return response.data;
     } catch (error: any) {
       console.error(`RPC call failed for method ${method}:`, error);
       throw new Error(String(error));
@@ -87,16 +87,16 @@ class RPCClient {
 
   // fn: detach、attach、clearbreakpoint、breakpoint、
   async debugCall(fn: DebugCallType) {
-    return this.rpcCall("vmdebug", [fn]);
+    return this.rpcCall('vmdebug', [fn]);
   }
 
   async signRawTransaction(
     hexString: string,
     params: unknown[],
     privkeys: string[],
-    ishash: boolean
+    ishash: boolean,
   ) {
-    const res = await this.rpcCall("signrawtransaction", [
+    const res = await this.rpcCall('signrawtransaction', [
       hexString,
       params,
       privkeys,
@@ -107,11 +107,11 @@ class RPCClient {
 
   // TODO true,15秒内确认
   async sendRawTransaction(hextx: string) {
-    return this.rpcCall("sendrawtransaction", [hextx, true, 15]);
+    return this.rpcCall('sendrawtransaction', [hextx, true, 15]);
   }
 
   async contractCall(contractAddress: string, params: string) {
-    return this.rpcCall("contractcall", [contractAddress, params]);
+    return this.rpcCall('contractcall', [contractAddress, params]);
   }
 }
 

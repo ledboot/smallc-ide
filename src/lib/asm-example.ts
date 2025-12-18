@@ -49,25 +49,26 @@ export function demonstrateAsmLib() {
   // 2. 编译ASM代码
   console.log('\n2. 编译ASM代码...');
   const result = Asm.assemble(exampleAsmCode);
-  
+
   if (result.success) {
     console.log('✅ 编译成功!');
     console.log(`📦 字节码长度: ${result.bytecode.length} 字符`);
     console.log(`🔗 合约哈希: ${result.hash}`);
     console.log(`📋 调试信息: ${result.debugInfo.length} 个函数`);
-    
+
     // 显示对象代码（前200个字符）
-    const truncatedObjectCode = result.objectCode.length > 200 
-      ? result.objectCode.substring(0, 200) + '...'
-      : result.objectCode;
+    const truncatedObjectCode =
+      result.objectCode.length > 200
+        ? result.objectCode.substring(0, 200) + '...'
+        : result.objectCode;
     console.log(`🔧 对象代码预览:\n${truncatedObjectCode}`);
-    
+
     // 显示字节码（前100个字符）
-    const truncatedBytecode = result.bytecode.length > 100
-      ? result.bytecode.substring(0, 100) + '...'
-      : result.bytecode;
+    const truncatedBytecode =
+      result.bytecode.length > 100
+        ? result.bytecode.substring(0, 100) + '...'
+        : result.bytecode;
     console.log(`🔢 字节码预览:\n${truncatedBytecode}`);
-    
   } else {
     console.log('❌ 编译失败:');
     console.log(`   错误: ${result.error}`);
@@ -103,7 +104,7 @@ STOP`;
 // 编译单个ASM文件的功能
 export function compileAsmCode(code: string) {
   const result = Asm.assemble(code);
-  
+
   return {
     success: result.success,
     bytecode: result.bytecode,
@@ -116,18 +117,18 @@ export function compileAsmCode(code: string) {
       originalLines: code.split('\n').length,
       objectCodeLines: result.objectCode.split('\n').length,
       bytecodeSize: result.bytecode.length,
-      hasDebugInfo: result.debugInfo.length > 0
-    }
+      hasDebugInfo: result.debugInfo.length > 0,
+    },
   };
 }
 
 // 批量编译多个ASM文件
-export function batchCompile(asmFiles: { name: string; code: string }[]) {
+export function batchCompile(asmFiles: {name: string; code: string}[]) {
   const results = asmFiles.map(file => {
     const result = compileAsmCode(file.code);
     return {
       fileName: file.name,
-      ...result
+      ...result,
     };
   });
 
@@ -140,18 +141,18 @@ export function batchCompile(asmFiles: { name: string; code: string }[]) {
       total: asmFiles.length,
       successful,
       failed,
-      successRate: Math.round((successful / asmFiles.length) * 100)
-    }
+      successRate: Math.round((successful / asmFiles.length) * 100),
+    },
   };
 }
 
 // 导出主要功能
-export { Asm };
+export {Asm};
 export default {
   compile: compileAsmCode,
   batchCompile,
   demonstrate: demonstrateAsmLib,
   validateSyntax: Asm.validateSyntax,
   formatCode: Asm.formatCode,
-  getSupportedOpcodes: Asm.getSupportedOpcodes
-}; 
+  getSupportedOpcodes: Asm.getSupportedOpcodes,
+};

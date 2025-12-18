@@ -1,6 +1,6 @@
-import { base58 } from "./base58";
-import { sha256 as nobleSha256 } from "@noble/hashes/sha2.js";
-import { bytesToHex2 } from "./index";
+import {base58} from './base58';
+import {sha256 as nobleSha256} from '@noble/hashes/sha2.js';
+import {bytesToHex2} from './index';
 
 /**
  * Decode a Base58Check address string.
@@ -11,7 +11,7 @@ export class Address {
   static decodeString(address: string): Uint8Array {
     const bytes = Uint8Array.from(base58.decode(address));
     if (bytes.length < 25) {
-      throw new Error("Invalid address length: " + address);
+      throw new Error('Invalid address length: ' + address);
     }
 
     const hash = bytes.slice(0, 21);
@@ -22,7 +22,7 @@ export class Address {
       checksum[2] !== bytes[23] ||
       checksum[3] !== bytes[24]
     ) {
-      throw new Error("Checksum validation failed! " + address);
+      throw new Error('Checksum validation failed! ' + address);
     }
 
     return hash;

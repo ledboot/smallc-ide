@@ -1,12 +1,12 @@
-"use client";
+'use client';
 
-import { useEffect, useRef } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Copy, Trash2, Search, ChevronDown, ChevronUp } from "lucide-react";
-import { toast } from "sonner";
-import { useConsoleStore, type LogEntry } from "@/lib/console-store";
-import { cn } from "@/lib/utils";
+import {useEffect, useRef} from 'react';
+import {Button} from '@/components/ui/button';
+import {Input} from '@/components/ui/input';
+import {Copy, Trash2, Search, ChevronDown, ChevronUp} from 'lucide-react';
+import {toast} from 'sonner';
+import {useConsoleStore, type LogEntry} from '@/lib/console-store';
+import {cn} from '@/lib/utils';
 
 const ConsolePanel = () => {
   const {
@@ -27,38 +27,38 @@ const ConsolePanel = () => {
   // Auto-scroll to bottom when new logs arrive
   useEffect(() => {
     if (autoScroll && logEndRef.current) {
-      logEndRef.current.scrollIntoView({ behavior: "smooth" });
+      logEndRef.current.scrollIntoView({behavior: 'smooth'});
     }
   }, [logs, autoScroll]);
 
   const handleClear = () => {
     clearLogs();
-    toast.success("日志已清空");
+    toast.success('日志已清空');
   };
 
-  const getLevelColor = (level: LogEntry["level"]) => {
+  const getLevelColor = (level: LogEntry['level']) => {
     switch (level) {
-      case "error":
-        return "text-red-400";
-      case "warn":
-        return "text-yellow-400";
-      case "success":
-        return "text-green-400";
+      case 'error':
+        return 'text-red-400';
+      case 'warn':
+        return 'text-yellow-400';
+      case 'success':
+        return 'text-green-400';
       default:
-        return "text-gray-300";
+        return 'text-gray-300';
     }
   };
 
-  const getLevelBadge = (level: LogEntry["level"]) => {
+  const getLevelBadge = (level: LogEntry['level']) => {
     switch (level) {
-      case "error":
-        return "bg-red-900/30 text-red-400";
-      case "warn":
-        return "bg-yellow-900/30 text-yellow-400";
-      case "success":
-        return "bg-green-900/30 text-green-400";
+      case 'error':
+        return 'bg-red-900/30 text-red-400';
+      case 'warn':
+        return 'bg-yellow-900/30 text-yellow-400';
+      case 'success':
+        return 'bg-green-900/30 text-green-400';
       default:
-        return "bg-blue-900/30 text-blue-400";
+        return 'bg-blue-900/30 text-blue-400';
     }
   };
 
@@ -66,7 +66,10 @@ const ConsolePanel = () => {
     if (!searchTerm) return text;
 
     const parts = text.split(
-      new RegExp(`(${searchTerm.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi")
+      new RegExp(
+        `(${searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`,
+        'gi',
+      ),
     );
     return parts.map((part, i) =>
       part.toLowerCase() === searchTerm.toLowerCase() ? (
@@ -75,7 +78,7 @@ const ConsolePanel = () => {
         </span>
       ) : (
         <span key={i}>{part}</span>
-      )
+      ),
     );
   };
 
@@ -88,7 +91,7 @@ const ConsolePanel = () => {
           <Input
             placeholder="搜索日志..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={e => setSearchTerm(e.target.value)}
             className="pl-8 h-8"
           />
         </div>
@@ -97,7 +100,7 @@ const ConsolePanel = () => {
           variant="outline"
           size="sm"
           onClick={() => setAutoScroll(!autoScroll)}
-          title={autoScroll ? "禁用自动滚动" : "启用自动滚动"}
+          title={autoScroll ? '禁用自动滚动' : '启用自动滚动'}
         >
           {autoScroll ? (
             <ChevronDown className="h-4 w-4" />
@@ -128,15 +131,15 @@ const ConsolePanel = () => {
       >
         {filteredLogs.length === 0 ? (
           <div className="text-muted-foreground text-center py-8">
-            {logs.length === 0 ? "暂无日志" : "没有匹配的日志"}
+            {logs.length === 0 ? '暂无日志' : '没有匹配的日志'}
           </div>
         ) : (
-          filteredLogs.map((log) => (
+          filteredLogs.map(log => (
             <div
               key={log.id}
               className={cn(
-                "py-1 hover:bg-gray-900/50 px-2 -mx-2 rounded",
-                getLevelColor(log.level)
+                'py-1 hover:bg-gray-900/50 px-2 -mx-2 rounded',
+                getLevelColor(log.level),
               )}
             >
               <span className="text-gray-500 mr-2">
@@ -144,8 +147,8 @@ const ConsolePanel = () => {
               </span>
               <span
                 className={cn(
-                  "inline-block px-1.5 py-0.5 rounded text-[10px] mr-2",
-                  getLevelBadge(log.level)
+                  'inline-block px-1.5 py-0.5 rounded text-[10px] mr-2',
+                  getLevelBadge(log.level),
                 )}
               >
                 {log.level.toUpperCase()}

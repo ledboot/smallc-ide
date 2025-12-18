@@ -1,15 +1,16 @@
+/* global importScripts */
 self.Module = {
   onRuntimeInitialized: function () {
-    postMessage({ type: "READY" });
+    postMessage({type: 'READY'});
   },
   print: function (text) {
-    postMessage({ type: "STDOUT", data: text });
+    postMessage({type: 'STDOUT', data: text});
   },
   printErr: function (text) {
-    postMessage({ type: "STDERR", data: text });
+    postMessage({type: 'STDERR', data: text});
   },
   locateFile: function (path, prefix) {
-    if (path.endsWith(".wasm")) {
+    if (path.endsWith('.wasm')) {
       return `${self.location.origin}/${path}`;
     }
     return prefix + path;
@@ -21,10 +22,10 @@ const origin = self.location.origin;
 importScripts(`${origin}/smallc_wasm.js`);
 
 self.onmessage = function (e) {
-  const { type, payload } = e.data;
+  const {type, payload} = e.data;
 
-  if (type === "COMPILE") {
-    const { args, files } = payload;
+  if (type === 'COMPILE') {
+    const {args, files} = payload;
 
     try {
       self.ls();
@@ -35,37 +36,37 @@ self.onmessage = function (e) {
       self.cleanWorkspace();
 
       // 3. Write files
-      files.forEach((file) => {
+      files.forEach(file => {
         const path = `${file.name}`;
-        console.log("Writing file:", path);
+        console.log('Writing file:', path);
         self.Module.FS.writeFile(path, file.content);
       });
 
       // 4. Compile
       // console.log('Worker running:', args);
       const ret = self.Module.callMain(args);
-      console.log("compile result", ret);
+      console.log('compile result', ret);
 
       // 5. Capture output files (.asm, .abi)
       // We assume the compiler generates files in /workspace
       // We'll scan the directory for new files or specific extensions
       const outputFiles = [];
-      const allFiles = self.Module.FS.readdir("/");
+      const allFiles = self.Module.FS.readdir('/');
 
       for (const filename of allFiles) {
-        console.log("read file->", filename);
-        if (filename.endsWith(".asm") || filename.endsWith(".abi")) {
+        console.log('read file->', filename);
+        if (filename.endsWith('.asm') || filename.endsWith('.abi')) {
           const content = self.Module.FS.readFile(filename, {
-            encoding: "utf8",
+            encoding: 'utf8',
           });
-          outputFiles.push({ name: filename, content: content });
+          outputFiles.push({name: filename, content: content});
         }
       }
       // 6. 清理workspace
       self.cleanWorkspace();
 
       postMessage({
-        type: "COMPILE_DONE",
+        type: 'COMPILE_DONE',
         result: {
           code: ret,
           outputFiles: outputFiles,
@@ -73,7 +74,7 @@ self.onmessage = function (e) {
       });
     } catch (err) {
       postMessage({
-        type: "COMPILE_ERROR",
+        type: 'COMPILE_ERROR',
         error: err.toString(),
       });
     }
@@ -81,14 +82,14 @@ self.onmessage = function (e) {
 };
 
 self.ls = function () {
-  const files = self.Module.FS.readdir("/");
+  const files = self.Module.FS.readdir('/');
   for (const file of files) {
-    console.log("ls->", file);
+    console.log('ls->', file);
   }
 };
 
 self.cleanWorkspace = function () {
-  self.rmrf("/");
+  self.rmrf('/');
 };
 
 self.rmrf = function (path) {
@@ -96,30 +97,30 @@ self.rmrf = function (path) {
     const files = self.Module.FS.readdir(path);
     for (const file of files) {
       if (
-        file === "." ||
-        file === ".." ||
-        file === "tmp" ||
-        file === "/" ||
-        file.includes("dev") ||
-        file.includes("home") ||
-        file.includes("proc")
+        file === '.' ||
+        file === '..' ||
+        file === 'tmp' ||
+        file === '/' ||
+        file.includes('dev') ||
+        file.includes('home') ||
+        file.includes('proc')
       )
         continue;
-      fullPath = "/" + file;
+      const fullPath = '/' + file;
       if (self.Module.FS.isDir(self.Module.FS.stat(fullPath).mode)) {
-        console.log("rmrf Removing directory:", fullPath);
+        console.log('rmrf Removing directory:', fullPath);
         self.rmrf(fullPath);
       } else {
-        console.log("Removing file:", fullPath);
+        console.log('Removing file:', fullPath);
         self.Module.FS.unlink(fullPath);
       }
     }
-    if (path === "/") {
+    if (path === '/') {
       return;
     }
-    console.log("Removing directory:", path);
+    console.log('Removing directory:', path);
     self.Module.FS.rmdir(path);
   } catch (e) {
-    console.error("rmrf error:", path, e);
+    console.error('rmrf error:', path, e);
   }
 };

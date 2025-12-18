@@ -1,29 +1,39 @@
-"use client";
+'use client';
 
-import { useEffect, useState, useRef } from "react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
-import FileExplorer from "@/components/file-explorer";
-import Editor from "@/components/editor";
-import type { CompiledResult, FileType } from "@/lib/types";
-import { Loader2, X, ChevronUp } from "lucide-react";
-import Sidebar, { type SidebarTab } from "@/components/sidebar";
-import DeployPanel from "@/components/deploy-panel";
-import DebugPanel from "@/components/debug-panel";
-import SearchPanel from "@/components/search-panel";
-import SettingsPanel from "@/components/settings-panel";
-import CompilePanel from "@/components/compile-panel";
-import { initWasmCompiler } from "@/lib/wasm-compiler";
-import ConsolePanel from "@/components/console-panel";
-import EditorTabs from "@/components/editor-tabs";
+import {useEffect, useState, useRef} from 'react';
+import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/components/ui/tabs';
+import {Button} from '@/components/ui/button';
+import FileExplorer from '@/components/file-explorer';
+import dynamic from 'next/dynamic';
+import {HOME_TAB} from '@/lib/constants';
+
+const Editor = dynamic(() => import('@/components/editor'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex-1 flex items-center justify-center bg-background">
+      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+    </div>
+  ),
+});
+
+import type {CompiledResult, FileType} from '@/lib/types';
+import {Loader2, X, ChevronUp} from 'lucide-react';
+import Sidebar, {type SidebarTab} from '@/components/sidebar';
+import DeployPanel from '@/components/deploy-panel';
+import DebugPanel from '@/components/debug-panel';
+import SearchPanel from '@/components/search-panel';
+import SettingsPanel from '@/components/settings-panel';
+import CompilePanel from '@/components/compile-panel';
+import {initWasmCompiler} from '@/lib/wasm-compiler';
+import ConsolePanel from '@/components/console-panel';
+import EditorTabs from '@/components/editor-tabs';
 
 export default function SmallcIDE() {
   const [isLoading, setIsLoading] = useState(true);
   const [files, setFiles] = useState<FileType[]>([]);
-  const [currentFile, setCurrentFile] = useState<FileType | null>(null);
-  const [openTabs, setOpenTabs] = useState<FileType[]>([]);
-  const [activeSidebarTab, setActiveSidebarTab] = useState<SidebarTab>("files");
+  const [currentFile, setCurrentFile] = useState<FileType | null>(HOME_TAB);
+  const [openTabs, setOpenTabs] = useState<FileType[]>([HOME_TAB]);
+  const [activeSidebarTab, setActiveSidebarTab] = useState<SidebarTab>('files');
 
   // Sidebar State
   const [sidebarWidth, setSidebarWidth] = useState(320);
@@ -46,7 +56,7 @@ export default function SmallcIDE() {
 
   // Sidebar resize logic
   useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
+    const handleMouseMove = (e: globalThis.MouseEvent) => {
       if (!isResizingRef.current) return;
 
       // 48px is the fixed width of the icon sidebar
@@ -59,23 +69,23 @@ export default function SmallcIDE() {
 
     const handleMouseUp = () => {
       isResizingRef.current = false;
-      document.body.style.cursor = "default";
-      document.body.style.userSelect = "auto";
+      document.body.style.cursor = 'default';
+      document.body.style.userSelect = 'auto';
     };
 
-    window.addEventListener("mousemove", handleMouseMove);
-    window.addEventListener("mouseup", handleMouseUp);
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
 
     return () => {
-      window.removeEventListener("mousemove", handleMouseMove);
-      window.removeEventListener("mouseup", handleMouseUp);
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
     };
   }, []);
 
   const startResizing = () => {
     isResizingRef.current = true;
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
   };
 
   // Tab management functions
@@ -86,36 +96,39 @@ export default function SmallcIDE() {
     }
 
     // Check if file is already open in a tab
-    const existingTab = openTabs.find((tab) => tab.id === file.id);
+    const existingTab = openTabs.find(tab => tab.id === file.id);
 
     if (existingTab) {
       // Switch to existing tab
       setCurrentFile(file);
     } else {
       // Open in new tab
-      setOpenTabs((prev) => [...prev, file]);
+      setOpenTabs(prev => [...prev, file]);
       setCurrentFile(file);
     }
   };
 
   const handleCloseTab = (fileId: string) => {
-    const tabIndex = openTabs.findIndex((tab) => tab.id === fileId);
+    const tabIndex = openTabs.findIndex(tab => tab.id === fileId);
     if (tabIndex === -1) return;
 
-    const newTabs = openTabs.filter((tab) => tab.id !== fileId);
-    setOpenTabs(newTabs);
+    const newTabs = openTabs.filter(tab => tab.id !== fileId);
 
     // If closing the active tab, switch to another tab
     if (currentFile?.id === fileId) {
       if (newTabs.length > 0) {
         // Switch to the previous tab, or the first tab if closing the first one
         const newActiveIndex = tabIndex > 0 ? tabIndex - 1 : 0;
-        setCurrentFile(newTabs[newActiveIndex]);
+        setCurrentFile(newTabs[newActiveIndex] || HOME_TAB);
       } else {
-        // No tabs left
-        setCurrentFile(null);
+        // No tabs left, fallback to home
+        const updatedTabs = [HOME_TAB];
+        setOpenTabs(updatedTabs);
+        setCurrentFile(HOME_TAB);
+        return;
       }
     }
+    setOpenTabs(newTabs);
   };
 
   const handleSwitchTab = (file: FileType) => {
@@ -124,33 +137,35 @@ export default function SmallcIDE() {
 
   const renderSidebarContent = () => {
     switch (activeSidebarTab) {
-      case "files":
+      case 'files':
         return (
           <FileExplorer
             files={files}
             setFiles={setFiles}
             currentFile={currentFile}
             setCurrentFile={handleOpenFile}
-            onFileDelete={(file) => {
+            onFileDelete={file => {
               // If deleted file is currently open, close the tab
               if (file.isDirectory) {
                 // For directory, close all tabs within that directory
-                const tabsToClose = openTabs.filter((tab) =>
-                  tab.id.startsWith(file.id + "/")
+                const tabsToClose = openTabs.filter(tab =>
+                  tab.id.startsWith(file.id + '/'),
                 );
 
                 if (tabsToClose.length > 0) {
-                  const idsToClose = new Set(tabsToClose.map((t) => t.id));
+                  const idsToClose = new Set(tabsToClose.map(t => t.id));
                   const newTabs = openTabs.filter(
-                    (tab) => !idsToClose.has(tab.id)
+                    tab => !idsToClose.has(tab.id),
                   );
                   setOpenTabs(newTabs);
 
                   if (currentFile && idsToClose.has(currentFile.id)) {
                     if (newTabs.length > 0) {
-                      setCurrentFile(newTabs[newTabs.length - 1]);
+                      setCurrentFile(newTabs[newTabs.length - 1] || HOME_TAB);
                     } else {
-                      setCurrentFile(null);
+                      // Fallback to home
+                      setOpenTabs([HOME_TAB]);
+                      setCurrentFile(HOME_TAB);
                     }
                   }
                 }
@@ -160,28 +175,28 @@ export default function SmallcIDE() {
             }}
           />
         );
-      case "search":
+      case 'search':
         return <SearchPanel files={files} onFileSelect={handleOpenFile} />;
-      case "compile":
+      case 'compile':
         return (
           <CompilePanel
             files={files}
             compiledResultMap={compiledResultMap}
             setCompiledResultMap={setCompiledResultMap}
             refreshFiles={async () => {
-              const { getAllFiles } = await import("@/lib/db");
+              const {getAllFiles} = await import('@/lib/db');
               const loadedFiles = await getAllFiles();
               setFiles(loadedFiles);
             }}
           />
         );
-      case "deploy":
+      case 'deploy':
         return (
           <DeployPanel files={files} compiledResultMap={compiledResultMap} />
         );
-      case "debug":
+      case 'debug':
         return <DebugPanel files={files} setCurrentFile={handleOpenFile} />;
-      case "settings":
+      case 'settings':
         return <SettingsPanel />;
       default:
         return null;
@@ -215,7 +230,7 @@ export default function SmallcIDE() {
         />
         <aside
           className="border-r bg-muted/40 overflow-auto flex-shrink-0"
-          style={{ width: sidebarWidth }}
+          style={{width: sidebarWidth}}
         >
           {renderSidebarContent()}
         </aside>
@@ -234,36 +249,35 @@ export default function SmallcIDE() {
               onTabClick={handleSwitchTab}
               onTabClose={handleCloseTab}
             />
-            {currentFile ? (
+            {currentFile || openTabs.length > 0 ? (
               <div className="flex-1">
                 <Editor
-                  file={currentFile}
+                  key={currentFile?.id || 'home'}
+                  file={currentFile || HOME_TAB}
                   compiledResultMap={compiledResultMap}
                   setCompiledResultMap={setCompiledResultMap}
-                  updateFile={(content) => {
-                    const updatedFiles = files.map((f) =>
-                      f.id === currentFile.id ? { ...f, content } : f
+                  updateFile={(content: string) => {
+                    if (currentFile?.id === 'home') return;
+                    const updatedFiles = files.map(f =>
+                      f.id === currentFile?.id ? {...f, content} : f,
                     );
                     setFiles(updatedFiles);
-                    setCurrentFile({ ...currentFile, content });
+                    if (currentFile) {
+                      setCurrentFile({...currentFile, content});
+                    }
 
                     // Update the file in openTabs as well
-                    setOpenTabs((prev) =>
-                      prev.map((tab) =>
-                        tab.id === currentFile.id ? { ...tab, content } : tab
-                      )
+                    setOpenTabs(prev =>
+                      prev.map(tab =>
+                        tab.id === currentFile?.id ? {...tab, content} : tab,
+                      ),
                     );
                   }}
                 />
               </div>
             ) : (
-              <div className="flex h-full items-center justify-center text-muted-foreground">
-                <div className="text-center">
-                  <h3 className="text-lg font-medium mb-2">
-                    Welcome to SmallC IDE Web
-                  </h3>
-                  <p>Select or create a file to start coding</p>
-                </div>
+              <div className="flex-1 flex items-center justify-center bg-background">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
               </div>
             )}
           </div>

@@ -1,8 +1,8 @@
-import { sha256 as nobleSha256 } from "@noble/hashes/sha2.js";
-import bigInt from "big-integer";
-import { getMonacoInstance } from "@/lib/monaco-instance";
-import { useConsoleStore, LogLevel } from "@/lib/console-store";
-import { BUNDLED_UTILS_CODE } from "./bundledUtils";
+import {sha256 as nobleSha256} from '@noble/hashes/sha2.js';
+import bigInt from 'big-integer';
+import {getMonacoInstance} from '@/lib/monaco-instance';
+import {useConsoleStore, LogLevel} from '@/lib/console-store';
+import {BUNDLED_UTILS_CODE} from './bundledUtils';
 
 /**
  * Creates a shimmed 'require' function for the contract runner environment.
@@ -12,14 +12,14 @@ import { BUNDLED_UTILS_CODE } from "./bundledUtils";
 export function createRequireShim() {
   return (moduleName: string) => {
     switch (moduleName) {
-      case "@noble/hashes/sha2":
-      case "@noble/hashes/sha2.js":
-        return { sha256: nobleSha256 };
-      case "big-integer":
-        return { default: bigInt };
+      case '@noble/hashes/sha2':
+      case '@noble/hashes/sha2.js':
+        return {sha256: nobleSha256};
+      case 'big-integer':
+        return {default: bigInt};
       default:
         throw new Error(
-          `Module '${moduleName}' is not available in the contract runner environment.`
+          `Module '${moduleName}' is not available in the contract runner environment.`,
         );
     }
   };
@@ -39,18 +39,18 @@ export async function runContractMethod(
   ...args: any[]
 ): Promise<any> {
   if (!scriptCode) {
-    console.error("No script code provided");
+    console.error('No script code provided');
     return;
   }
   if (!methodName) {
-    console.error("No method name provided");
+    console.error('No method name provided');
     return;
   }
   const monaco = getMonacoInstance();
-  const { addLog } = useConsoleStore.getState();
+  const {addLog} = useConsoleStore.getState();
 
   if (!monaco) {
-    addLog("Monaco editor not initialized", LogLevel.ERROR);
+    addLog('Monaco editor not initialized', LogLevel.ERROR);
     return;
   }
 
@@ -60,13 +60,13 @@ export async function runContractMethod(
   try {
     // Create a temporary model for compilation
     // We use a unique URI to avoid conflicts
-    const uri = monaco.Uri.parse("file:///temp_runner.ts");
+    const uri = monaco.Uri.parse('file:///temp_runner.ts');
     let model = monaco.editor.getModel(uri);
 
     if (model) {
       model.setValue(code);
     } else {
-      model = monaco.editor.createModel(code, "typescript", uri);
+      model = monaco.editor.createModel(code, 'typescript', uri);
     }
 
     // Ensure we compile to CommonJS so we can capture exports
@@ -91,11 +91,11 @@ export async function runContractMethod(
     // defaults.setCompilerOptions(originalOptions);
 
     const invokeFile = result.outputFiles.find((o: any) =>
-      o.name.endsWith(".js")
+      o.name.endsWith('.js'),
     );
 
     if (!invokeFile) {
-      addLog("Compilation failed: No output file generated", LogLevel.ERROR);
+      addLog('Compilation failed: No output file generated', LogLevel.ERROR);
       return;
     }
 
@@ -112,7 +112,7 @@ export async function runContractMethod(
 }
 
 const executeJS = async (code: string, methodName: string, args: any[]) => {
-  const { addLog } = useConsoleStore.getState();
+  const {addLog} = useConsoleStore.getState();
 
   // Hijack console
   const originalConsole = console;
@@ -120,8 +120,8 @@ const executeJS = async (code: string, methodName: string, args: any[]) => {
   // Helper to format args
   const formatArgs = (args: any[]) => {
     return args
-      .map((arg) => {
-        if (typeof arg === "object") {
+      .map(arg => {
+        if (typeof arg === 'object') {
           try {
             return JSON.stringify(arg);
           } catch {
@@ -130,7 +130,7 @@ const executeJS = async (code: string, methodName: string, args: any[]) => {
         }
         return String(arg);
       })
-      .join(" ");
+      .join(' ');
   };
 
   const hijackedConsole = {
@@ -161,11 +161,11 @@ const executeJS = async (code: string, methodName: string, args: any[]) => {
     // We intentionally don't "use strict" globally here so that new Function behaves a bit more loosely,
     // but the emitted code might have it.
     // We pass exports and require to simulate CommonJS environment.
-    const fun = new Function("console", "require", "exports", code);
+    const fun = new Function('console', 'require', 'exports', code);
     fun(hijackedConsole, require, exports);
 
     if (methodName) {
-      if (exports[methodName] && typeof exports[methodName] === "function") {
+      if (exports[methodName] && typeof exports[methodName] === 'function') {
         const result = await exports[methodName](...args);
         if (result !== undefined) {
           addLog(`TS Result: ${formatArgs([result])}`, LogLevel.SUCCESS);
@@ -173,29 +173,29 @@ const executeJS = async (code: string, methodName: string, args: any[]) => {
         } else {
           addLog(
             `TS Method '${methodName}' executed successfully (no return value)`,
-            LogLevel.SUCCESS
+            LogLevel.SUCCESS,
           );
         }
       } else {
         const available = Object.keys(exports).filter(
-          (k) => typeof exports[k] === "function"
+          k => typeof exports[k] === 'function',
         );
         addLog(
           `TS Method '${methodName}' not found or not exported. Available: ${available.join(
-            ", "
+            ', ',
           )}`,
-          LogLevel.WARN
+          LogLevel.WARN,
         );
 
         // Fallback: Check if there's a default export?
         // CommonJS: exports.default...
         if (
           exports.default &&
-          typeof exports.default[methodName] === "function"
+          typeof exports.default[methodName] === 'function'
         ) {
           addLog(
             `Found '${methodName}' in default export, executing...`,
-            LogLevel.INFO
+            LogLevel.INFO,
           );
           const result = await exports.default[methodName](...args);
           if (result !== undefined) {

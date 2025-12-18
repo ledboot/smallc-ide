@@ -1,23 +1,23 @@
-"use client";
+'use client';
 
-import { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import {useState, useEffect} from 'react';
+import {Button} from '@/components/ui/button';
+import {Input} from '@/components/ui/input';
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogFooter,
-} from "@/components/ui/dialog";
+} from '@/components/ui/dialog';
 import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuTrigger,
   ContextMenuSeparator,
-} from "@/components/ui/context-menu";
-import type { FileType } from "@/lib/types";
+} from '@/components/ui/context-menu';
+import type {FileType} from '@/lib/types';
 import {
   saveFile,
   deleteFile,
@@ -25,7 +25,7 @@ import {
   createFolder,
   deleteFolder,
   renameFile,
-} from "@/lib/db";
+} from '@/lib/db';
 import {
   FolderIcon,
   FileIcon,
@@ -36,8 +36,8 @@ import {
   FolderPlusIcon,
   Edit2Icon,
   FileTextIcon,
-} from "lucide-react";
-import { toast } from "sonner";
+} from 'lucide-react';
+import {toast} from 'sonner';
 
 interface FileExplorerProps {
   files: FileType[];
@@ -52,23 +52,23 @@ const buildTreeFromFiles = (files: FileType[]): FileType[] => {
   const root: FileType[] = [];
 
   // Create a map of all files
-  files.forEach((file) => {
-    fileMap.set(file.id, { ...file, children: [] });
+  files.forEach(file => {
+    fileMap.set(file.id, {...file, children: []});
   });
 
   // Build the tree
-  files.forEach((file) => {
+  files.forEach(file => {
     const node = fileMap.get(file.id);
     if (!node) return;
 
-    const pathParts = file.id.split("/").filter(Boolean);
+    const pathParts = file.id.split('/').filter(Boolean);
 
     if (pathParts.length === 1) {
       // Top level file/folder
       root.push(node);
     } else {
       // Nested file/folder
-      const parentPath = "/" + pathParts.slice(0, -1).join("/");
+      const parentPath = '/' + pathParts.slice(0, -1).join('/');
       const parent = fileMap.get(parentPath);
 
       if (parent) {
@@ -89,7 +89,7 @@ const buildTreeFromFiles = (files: FileType[]): FileType[] => {
       }
       return a.isDirectory ? -1 : 1;
     });
-    nodes.forEach((node) => {
+    nodes.forEach(node => {
       if (node.children) {
         sortNodes(node.children);
       }
@@ -111,15 +111,15 @@ export default function FileExplorer({
   const [isCreateFolderDialogOpen, setIsCreateFolderDialogOpen] =
     useState(false);
   const [isRenameDialogOpen, setIsRenameDialogOpen] = useState(false);
-  const [newFileName, setNewFileName] = useState("");
-  const [newFolderName, setNewFolderName] = useState("");
-  const [renameValue, setRenameValue] = useState("");
+  const [newFileName, setNewFileName] = useState('');
+  const [newFolderName, setNewFolderName] = useState('');
+  const [renameValue, setRenameValue] = useState('');
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(
-    new Set()
+    new Set(),
   );
   const [fileTree, setFileTree] = useState<FileType[]>([]);
   const [contextItem, setContextItem] = useState<FileType | null>(null);
-  const [contextParentPath, setContextParentPath] = useState<string>("");
+  const [contextParentPath, setContextParentPath] = useState<string>('');
 
   useEffect(() => {
     loadFiles();
@@ -136,7 +136,7 @@ export default function FileExplorer({
   };
 
   const toggleFolder = (folderId: string) => {
-    setExpandedFolders((prev) => {
+    setExpandedFolders(prev => {
       const newSet = new Set(prev);
       if (newSet.has(folderId)) {
         newSet.delete(folderId);
@@ -150,27 +150,27 @@ export default function FileExplorer({
   const handleCreateFile = async (parentPath?: string) => {
     if (!newFileName) return;
 
-    const fileExtension = newFileName.includes(".") ? "" : ".c";
+    const fileExtension = newFileName.includes('.') ? '' : '.c';
     const fileName = newFileName + fileExtension;
     const filePath = parentPath ? `${parentPath}/${fileName}` : `/${fileName}`;
 
     // Check if file already exists
-    if (files.some((file) => file.id === filePath)) {
-      toast.error("File already exists");
+    if (files.some(file => file.id === filePath)) {
+      toast.error('File already exists');
       return;
     }
 
-    let defaultContent = "";
+    let defaultContent = '';
 
-    if (fileName.endsWith(".c")) {
+    if (fileName.endsWith('.c')) {
       defaultContent = `#include <stdio.h>
 
 int main() {
     printf("Hello, World!\\n");
     return 0;
 }`;
-    } else if (fileName.endsWith(".h") || fileName.endsWith(".hpp")) {
-      const headerGuard = fileName.toUpperCase().replace(/[^A-Z0-9]/g, "_");
+    } else if (fileName.endsWith('.h') || fileName.endsWith('.hpp')) {
+      const headerGuard = fileName.toUpperCase().replace(/[^A-Z0-9]/g, '_');
       defaultContent = `#ifndef ${headerGuard}
 #define ${headerGuard}
 
@@ -191,7 +191,7 @@ int main() {
     await saveFile(newFile);
     await loadFiles();
     setCurrentFile(newFile);
-    setNewFileName("");
+    setNewFileName('');
     setIsCreateFileDialogOpen(false);
     toast.success(`Created ${fileName}`);
   };
@@ -204,14 +204,14 @@ int main() {
       : `/${newFolderName}`;
 
     // Check if folder already exists
-    if (files.some((file) => file.id === folderPath)) {
-      toast.error("Folder already exists");
+    if (files.some(file => file.id === folderPath)) {
+      toast.error('Folder already exists');
       return;
     }
 
     await createFolder(folderPath);
     await loadFiles();
-    setNewFolderName("");
+    setNewFolderName('');
     setIsCreateFolderDialogOpen(false);
     toast.success(`Created folder ${newFolderName}`);
   };
@@ -220,7 +220,7 @@ int main() {
     if (!contextItem || !renameValue) return;
 
     const oldPath = contextItem.id;
-    const parentPath = oldPath.substring(0, oldPath.lastIndexOf("/"));
+    const parentPath = oldPath.substring(0, oldPath.lastIndexOf('/'));
     const newPath = parentPath
       ? `${parentPath}/${renameValue}`
       : `/${renameValue}`;
@@ -231,8 +231,8 @@ int main() {
     }
 
     // Check if new name already exists
-    if (files.some((file) => file.id === newPath)) {
-      toast.error("A file or folder with this name already exists");
+    if (files.some(file => file.id === newPath)) {
+      toast.error('A file or folder with this name already exists');
       return;
     }
 
@@ -245,11 +245,11 @@ int main() {
       }
 
       setIsRenameDialogOpen(false);
-      setRenameValue("");
+      setRenameValue('');
       toast.success(`Renamed to ${renameValue}`);
     } catch (error) {
-      console.error("Rename error:", error);
-      toast.error("Failed to rename");
+      console.error('Rename error:', error);
+      toast.error('Failed to rename');
     }
   };
 
@@ -273,18 +273,18 @@ int main() {
 
       toast.success(`Deleted ${item.name}`);
     } catch (error) {
-      console.error("Delete error:", error);
-      toast.error("Failed to delete");
+      console.error('Delete error:', error);
+      toast.error('Failed to delete');
     }
   };
 
-  const openContextMenu = (item: FileType, parentPath: string = "") => {
+  const openContextMenu = (item: FileType, parentPath: string = '') => {
     setContextItem(item);
     setContextParentPath(parentPath);
   };
 
-  const renderFileTree = (items: FileType[], level = 0, parentPath = "") => {
-    return items.map((item) => {
+  const renderFileTree = (items: FileType[], level = 0, parentPath = '') => {
+    return items.map(item => {
       const isExpanded = expandedFolders.has(item.id);
       const isSelected = currentFile?.id === item.id;
 
@@ -295,11 +295,11 @@ int main() {
               <div
                 className={`flex cursor-pointer items-center rounded-md px-2 py-1 text-sm ${
                   isSelected
-                    ? "bg-accent text-accent-foreground"
-                    : "hover:bg-muted"
+                    ? 'bg-accent text-accent-foreground'
+                    : 'hover:bg-muted'
                 }`}
-                style={{ paddingLeft: `${level * 16 + 8}px` }}
-                onClick={(e) => {
+                style={{paddingLeft: `${level * 16 + 8}px`}}
+                onClick={e => {
                   e.stopPropagation();
                   if (item.isDirectory) {
                     toggleFolder(item.id);
@@ -388,7 +388,7 @@ int main() {
             className="h-8 w-8"
             title="New Folder"
             onClick={() => {
-              setContextParentPath("");
+              setContextParentPath('');
               setIsCreateFolderDialogOpen(true);
             }}
           >
@@ -400,7 +400,7 @@ int main() {
             className="h-8 w-8"
             title="New File"
             onClick={() => {
-              setContextParentPath("");
+              setContextParentPath('');
               setIsCreateFileDialogOpen(true);
             }}
           >
@@ -440,9 +440,9 @@ int main() {
             <Input
               placeholder="File name (e.g. main.c, app.cpp, header.h)"
               value={newFileName}
-              onChange={(e) => setNewFileName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleCreateFile(contextParentPath);
+              onChange={e => setNewFileName(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') handleCreateFile(contextParentPath);
               }}
             />
           </div>
@@ -474,9 +474,9 @@ int main() {
             <Input
               placeholder="Folder name"
               value={newFolderName}
-              onChange={(e) => setNewFolderName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleCreateFolder(contextParentPath);
+              onChange={e => setNewFolderName(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') handleCreateFolder(contextParentPath);
               }}
             />
           </div>
@@ -493,16 +493,16 @@ int main() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              Rename {contextItem?.isDirectory ? "Folder" : "File"}
+              Rename {contextItem?.isDirectory ? 'Folder' : 'File'}
             </DialogTitle>
           </DialogHeader>
           <div className="py-4">
             <Input
               placeholder="New name"
               value={renameValue}
-              onChange={(e) => setRenameValue(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleRename();
+              onChange={e => setRenameValue(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') handleRename();
               }}
             />
           </div>

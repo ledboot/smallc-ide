@@ -28,7 +28,11 @@ STOP
   console.log('\n📝 测试2: 操作码替换');
   const opcodeCode = 'EVAL32 gi0,4,\nIF ii0,4,\nRETURN';
   const opcodeResult = Asm.assemble(opcodeCode);
-  if (opcodeResult.success && opcodeResult.objectCode.includes('C') && opcodeResult.objectCode.includes('K')) {
+  if (
+    opcodeResult.success &&
+    opcodeResult.objectCode.includes('C') &&
+    opcodeResult.objectCode.includes('K')
+  ) {
     console.log('✅ 操作码替换测试通过');
   } else {
     console.log('❌ 操作码替换测试失败');
@@ -97,7 +101,11 @@ RETURN`;
   // 测试8: 操作码列表
   console.log('\n📝 测试8: 操作码列表');
   const opcodes = Asm.getSupportedOpcodes();
-  if (opcodes.length > 0 && opcodes.includes('EVAL32 ') && opcodes.includes('RETURN')) {
+  if (
+    opcodes.length > 0 &&
+    opcodes.includes('EVAL32 ') &&
+    opcodes.includes('RETURN')
+  ) {
     console.log('✅ 操作码列表测试通过');
     console.log(`   支持 ${opcodes.length} 个操作码`);
   } else {
@@ -140,23 +148,25 @@ RETURN
   }
 
   console.log('\n✨ Asm 测试完成!');
-  
+
   // 返回测试结果摘要
   return {
     totalTests: 9,
     basicCompilation: basicResult.success,
-    opcodeReplacement: opcodeResult.success && opcodeResult.objectCode.includes('C'),
-    stringProcessing: stringResult.success && stringResult.objectCode.includes('x74657374'),
+    opcodeReplacement:
+      opcodeResult.success && opcodeResult.objectCode.includes('C'),
+    stringProcessing:
+      stringResult.success && stringResult.objectCode.includes('x74657374'),
     abiProcessing: abiResult.success,
     debugInfo: debugResult.success && debugResult.debugInfo.length > 0,
     syntaxValidation: !validation.valid && validation.errors.length > 0,
     codeFormatting: formatted.includes('  EVAL32'),
     opcodeList: opcodes.length > 0,
-    complexCompilation: complexResult.success
+    complexCompilation: complexResult.success,
   };
 }
 
 // 如果在Node.js环境中直接运行此文件
 if (typeof window === 'undefined' && require.main === module) {
   runAsmLibTests();
-} 
+}

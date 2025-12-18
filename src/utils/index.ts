@@ -1,6 +1,6 @@
-import { sha256 as nobleSha256 } from "@noble/hashes/sha2.js";
+import {sha256 as nobleSha256} from '@noble/hashes/sha2.js';
 
-import base58 from "./base58";
+import base58 from './base58';
 import {
   BorderDef,
   PolygonDef,
@@ -10,8 +10,8 @@ import {
   TinDef,
   ToutDef,
   VertexDef,
-} from "./defs";
-import { Reader } from "./reader";
+} from './defs';
+import {Reader} from './reader';
 
 // 辅助函数：将字符转换为半字节值
 export function nib(charCode: number): number {
@@ -22,7 +22,7 @@ export function nib(charCode: number): number {
 }
 
 export function hexToBytes(hex: string): Uint8Array {
-  const clean = hex.startsWith("0x") ? hex.slice(2) : hex;
+  const clean = hex.startsWith('0x') ? hex.slice(2) : hex;
   const len = clean.length;
   const out = new Uint8Array(Math.floor(len / 2));
   for (let i = 0, j = 0; i < len; i += 2, j++) {
@@ -48,26 +48,32 @@ export function addressHexToString(bytes: Uint8Array, version: number): string {
 }
 
 export function bytesToHex(bytes: Uint8Array | number[]): string {
-  const lut = Array.from({ length: 256 }, (_, i) =>
-    i.toString(16).padStart(2, "0")
+  const lut = Array.from({length: 256}, (_, i) =>
+    i.toString(16).padStart(2, '0'),
   );
-  let s = "";
-  for (let i = 0; i < bytes.length; i++) s += lut[(bytes as any)[i]];
+  let s = '';
+  for (let i = 0; i < bytes.length; i++) {
+    const byte = bytes[i];
+    if (byte !== undefined) s += lut[byte];
+  }
   return s;
 }
 
 export function bytesToString(bytes: Uint8Array): string {
-  let str: string = "";
-  for (let i = 0; i < bytes.length; i++) str += String.fromCharCode(bytes[i]);
+  let str: string = '';
+  for (let i = 0; i < bytes.length; i++) {
+    const byte = bytes[i];
+    if (byte !== undefined) str += String.fromCharCode(byte);
+  }
   return str;
 }
 
 // h 要是hash字符串
 export function hashReverse(h: string): string {
-  if (typeof h !== "string" || h.length !== 64) {
-    return "";
+  if (typeof h !== 'string' || h.length !== 64) {
+    return '';
   }
-  let s = "";
+  let s = '';
   for (let i = 0; i < 64; i += 2) {
     s = h.charAt(i) + h.charAt(i + 1) + s;
   }
@@ -138,7 +144,7 @@ export function decode(r: Reader) {
 
     if ((version & 0x10) == 0) {
       lockTime = r.readInt32();
-      console.log("lockTime", lockTime);
+      console.log('lockTime', lockTime);
     }
 
     count = r.readVarInt();
@@ -152,20 +158,23 @@ export function decode(r: Reader) {
 export function bytesToHex2(bytes: Uint8Array): string {
   const hex = [];
   for (let i = 0; i < bytes.length; i++) {
-    hex.push((bytes[i] >>> 4).toString(16));
-    hex.push((bytes[i] & 0xf).toString(16));
+    const byte = bytes[i];
+    if (byte !== undefined) {
+      hex.push((byte >>> 4).toString(16));
+      hex.push((byte & 0xf).toString(16));
+    }
   }
-  return hex.join("");
+  return hex.join('');
 }
 
 export function bin2hex(str: string) {
-  let hex = "",
+  let hex = '',
     num;
   str = padLeft(str, 4);
   for (let i = str.length; i >= 4; i -= 4) {
     num = parseInt(str.slice(i - 4, i), 2);
     if (isNaN(num)) {
-      throw new Error("Invalid binary character.");
+      throw new Error('Invalid binary character.');
     }
     hex = num.toString(16) + hex;
   }
@@ -178,11 +187,11 @@ export function padLeft(str: string, bits: number) {
 	radix: 16, // work with HEX by default
 	minBits: 3,
 	maxBits: 20, // this permits 1,048,575 shares, though going this high is NOT recommended in JS!
-	
+
 	bytesPerChar: 2,
 	maxBytesPerChar: 6
   */
   bits = bits || 8;
   const missing = str.length % bits;
-  return (missing ? new Array(bits - missing + 1).join("0") : "") + str;
+  return (missing ? new Array(bits - missing + 1).join('0') : '') + str;
 }

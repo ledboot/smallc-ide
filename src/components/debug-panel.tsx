@@ -1,34 +1,34 @@
-"use client";
+'use client';
 
-import { useState, useEffect } from "react";
-import { FileIcon } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import {useState, useEffect} from 'react';
+import {FileIcon} from 'lucide-react';
+import {Button} from '@/components/ui/button';
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
+} from '@/components/ui/card';
+import {Label} from '@/components/ui/label';
+import {Input} from '@/components/ui/input';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { useRootStore } from "@/state";
-import { rpcClient } from "@/lib/api";
-import { toast } from "sonner";
-import type { FileType } from "@/lib/types";
+} from '@/components/ui/select';
+import {useRootStore} from '@/state';
+import {rpcClient} from '@/lib/api';
+import {toast} from 'sonner';
+import type {FileType} from '@/lib/types';
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from "@/components/ui/tooltip";
+} from '@/components/ui/tooltip';
 import {
   VscDebugStart,
   VscDebugPause,
@@ -36,9 +36,9 @@ import {
   VscDebugStepInto,
   VscDebugStepOut,
   VscDebugRestart,
-} from "react-icons/vsc";
+} from 'react-icons/vsc';
 
-import { DebugCallType } from "@/constants";
+import {DebugCallType} from '@/constants';
 
 interface DebugPanelProps {
   files: FileType[];
@@ -68,35 +68,35 @@ interface Variable {
   type: string;
 }
 
-export default function DebugPanel({ files, setCurrentFile }: DebugPanelProps) {
-  const { chainType } = useRootStore().settings;
+export default function DebugPanel({files, setCurrentFile}: DebugPanelProps) {
+  const {chainType} = useRootStore().settings;
   const [isDebugging, setIsDebugging] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [debugSession, setDebugSession] = useState<{
     sessionId: string;
-    breakpoints: { line: number; file: string }[];
+    breakpoints: {line: number; file: string}[];
   } | null>(null);
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const [variables, setVariables] = useState<Variable[]>([]);
 
   // Filter C files for debugging
-  const cFiles = files.filter((file) => file.name.endsWith(".c"));
-  const selectedFile = files.find((file) => file.id === selectedFileId) || null;
+  const cFiles = files.filter(file => file.name.endsWith('.c'));
+  const selectedFile = files.find(file => file.id === selectedFileId) || null;
 
-  const [transactionHash, setTransactionHash] = useState<string>("");
+  const [transactionHash, setTransactionHash] = useState<string>('');
 
   // Auto-select first .c file if none selected and files are available
   useEffect(() => {
     if (cFiles.length > 0 && !selectedFileId) {
-      setSelectedFileId(cFiles[0].id);
-      setCurrentFile(cFiles[0]);
+      setSelectedFileId(cFiles[0]!.id);
+      setCurrentFile(cFiles[0]!);
     }
   }, [cFiles, selectedFileId, setCurrentFile]);
 
   // Initialize debug session
   const initializeDebugSession = async () => {
     if (!selectedFile) {
-      toast.error("Please select a file to debug");
+      toast.error('Please select a file to debug');
       return false;
     }
 
@@ -104,11 +104,11 @@ export default function DebugPanel({ files, setCurrentFile }: DebugPanelProps) {
       // Set breakpoints for the selected file
       if (selectedFile.breakpoints?.length) {
         const breakpoints = selectedFile.breakpoints.map(
-          (bp: { lineNumber: number; condition?: string }) => ({
+          (bp: {lineNumber: number; condition?: string}) => ({
             line: bp.lineNumber,
-            file: selectedFile?.name || "",
+            file: selectedFile?.name || '',
             condition: bp.condition,
-          })
+          }),
         );
 
         // Use the breakpoints in the debug call
@@ -126,15 +126,15 @@ export default function DebugPanel({ files, setCurrentFile }: DebugPanelProps) {
 
       return true;
     } catch (error) {
-      console.error("Failed to initialize debug session:", error);
-      toast.error("Failed to start debug session");
+      console.error('Failed to initialize debug session:', error);
+      toast.error('Failed to start debug session');
       return false;
     }
   };
 
   const handleStartDebugging = async () => {
     if (!selectedFile) {
-      toast.warning("Please select a file to debug");
+      toast.warning('Please select a file to debug');
       return;
     }
 
@@ -156,8 +156,8 @@ export default function DebugPanel({ files, setCurrentFile }: DebugPanelProps) {
         setVariables(debugInfo.variables || []);
       }
     } catch (error) {
-      console.error("Debug start failed:", error);
-      toast.error("Failed to start debugging");
+      console.error('Debug start failed:', error);
+      toast.error('Failed to start debugging');
       setIsDebugging(false);
       setIsPaused(false);
     }
@@ -172,7 +172,7 @@ export default function DebugPanel({ files, setCurrentFile }: DebugPanelProps) {
         if (err) throw new Error(err);
       }
     } catch (error) {
-      console.error("Error stopping debug session:", error);
+      console.error('Error stopping debug session:', error);
     } finally {
       setIsDebugging(false);
       setIsPaused(false);
@@ -193,8 +193,8 @@ export default function DebugPanel({ files, setCurrentFile }: DebugPanelProps) {
       if (err) throw new Error(err);
       updateDebugState(result);
     } catch (error) {
-      console.error("Continue failed:", error);
-      toast.error("Continue failed");
+      console.error('Continue failed:', error);
+      toast.error('Continue failed');
       setIsPaused(true);
     }
   };
@@ -209,8 +209,8 @@ export default function DebugPanel({ files, setCurrentFile }: DebugPanelProps) {
       if (err) throw new Error(err);
       updateDebugState(result);
     } catch (error) {
-      console.error("Pause failed:", error);
-      toast.error("Failed to pause execution");
+      console.error('Pause failed:', error);
+      toast.error('Failed to pause execution');
     }
   };
 
@@ -224,8 +224,8 @@ export default function DebugPanel({ files, setCurrentFile }: DebugPanelProps) {
       if (err) throw new Error(err);
       updateDebugState(result);
     } catch (error) {
-      console.error("Step over failed:", error);
-      toast.error("Step over failed");
+      console.error('Step over failed:', error);
+      toast.error('Step over failed');
     }
   };
 
@@ -239,8 +239,8 @@ export default function DebugPanel({ files, setCurrentFile }: DebugPanelProps) {
       if (err) throw new Error(err);
       updateDebugState(result);
     } catch (error) {
-      console.error("Step into failed:", error);
-      toast.error("Step into failed");
+      console.error('Step into failed:', error);
+      toast.error('Step into failed');
     }
   };
 
@@ -254,8 +254,8 @@ export default function DebugPanel({ files, setCurrentFile }: DebugPanelProps) {
       if (err) throw new Error(err);
       updateDebugState(result);
     } catch (error) {
-      console.error("Step out failed:", error);
-      toast.error("Step out failed");
+      console.error('Step out failed:', error);
+      toast.error('Step out failed');
     }
   };
 
@@ -282,10 +282,10 @@ export default function DebugPanel({ files, setCurrentFile }: DebugPanelProps) {
         <div className="space-y-2">
           <Label htmlFor="debug-file">Select File</Label>
           <Select
-            value={selectedFileId || ""}
-            onValueChange={(value) => {
+            value={selectedFileId || ''}
+            onValueChange={value => {
               setSelectedFileId(value);
-              const file = files.find((f) => f.id === value);
+              const file = files.find(f => f.id === value);
               if (file) setCurrentFile(file);
             }}
           >
@@ -293,7 +293,7 @@ export default function DebugPanel({ files, setCurrentFile }: DebugPanelProps) {
               <SelectValue placeholder="Select a file to debug" />
             </SelectTrigger>
             <SelectContent>
-              {cFiles.map((file) => (
+              {cFiles.map(file => (
                 <SelectItem key={file.id} value={file.id}>
                   <div className="flex items-center">
                     <FileIcon className="mr-2 h-4 w-4" />
@@ -310,7 +310,7 @@ export default function DebugPanel({ files, setCurrentFile }: DebugPanelProps) {
             id="debug-addr"
             placeholder="Enter transaction hash"
             value={transactionHash}
-            onChange={(e) => setTransactionHash(e.target.value)}
+            onChange={e => setTransactionHash(e.target.value)}
           />
         </div>
       </div>
@@ -322,8 +322,8 @@ export default function DebugPanel({ files, setCurrentFile }: DebugPanelProps) {
             {selectedFile
               ? `Ready to debug: ${selectedFile.name}`
               : cFiles.length > 0
-              ? "Select a C file to debug"
-              : "No C files available"}
+                ? 'Select a C file to debug'
+                : 'No C files available'}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

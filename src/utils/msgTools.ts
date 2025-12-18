@@ -1,11 +1,18 @@
-import { sha256 as nobleSha256 } from '@noble/hashes/sha2.js';
+import {sha256 as nobleSha256} from '@noble/hashes/sha2.js';
 
-import { Packer } from './packer';
-import { Reader } from './reader';
-import { hashReverse } from './index';
-import { VertexDef, BorderDef , PolygonDef, RightDef, RightSetDef, SeparatorDef, TinDef, ToutDef } from './defs';
-
-
+import {Packer} from './packer';
+import {Reader} from './reader';
+import {hashReverse, bytesToHex} from './index';
+import {
+  VertexDef,
+  BorderDef,
+  PolygonDef,
+  RightDef,
+  RightSetDef,
+  SeparatorDef,
+  TinDef,
+  ToutDef,
+} from './defs';
 
 export class MsgT {
   version: number;
@@ -71,7 +78,7 @@ export class MsgT {
     let signatureIndex = 0;
     const addresses: number[] = [];
     for (let i = 0; i < this.tIn.length; i++) {
-      const sid = addresses.findIndex((n) => n === this.tIn[i].signatureIndex);
+      const sid = addresses.findIndex(n => n === this.tIn[i].signatureIndex);
       if (sid >= 0) {
         this.tIn[i].signatureIndex = sid;
       } else {
@@ -136,11 +143,12 @@ export class MsgT {
     if (mode & 1) {
       w.WriteVarInt(this.signatureScripts.length);
       for (let i = 0; i < this.signatureScripts.length; i++) {
-        if (!this.signatureScripts[i]) {
+        const script = this.signatureScripts[i];
+        if (!script) {
           w.WriteVarInt(0);
         } else {
-          w.WriteVarInt(this.signatureScripts[i].length / 2);
-          w.PackHs(this.signatureScripts[i]);
+          w.WriteVarInt(script.length / 2);
+          w.PackHs(script);
         }
       }
     } else {
@@ -151,7 +159,7 @@ export class MsgT {
 
   hashval() {
     const h = nobleSha256(nobleSha256(this.encode(0)));
-    return hashReverse(h);
+    return hashReverse(bytesToHex(h));
   }
 
   rawDecode(raw: string) {
@@ -197,7 +205,7 @@ export class MsgT {
             c = new SeparatorDef();
             break;
         }
-        c.read(r);
+        if (c) c.read(r);
         this.txDef.push(c);
       }
 
@@ -234,7 +242,10 @@ export class MsgT {
   modifiable() {
     let m = this.signatureScripts.length === 0;
     for (let i = 0; i < this.tIn.length && m; i++) {
-      if (this.tIn[i].previousOutPoint.hash === '0000000000000000000000000000000000000000000000000000000000000000') {
+      if (
+        this.tIn[i].previousOutPoint.hash ===
+        '0000000000000000000000000000000000000000000000000000000000000000'
+      ) {
         continue;
       } else if (this.tIn[i].signatureIndex !== -1) {
         m = false;
@@ -260,24 +271,22 @@ export class MsgT {
     // });
   }
 
-  inputOf (tokenType: any) {
+  inputOf(tokenType: any) {
     // return new Promise(resolve=>omegaDB.transaction(function (dbtx) {
     //   var sql = '', glue = '';
     //   for (var i = 0; i < T.TIn.length; i++) {
     //     if (T.TIn[i].prototype.IsSeparator()) continue;
-
     //     sql += glue + "(txid='" + T.TIn[i].PreviousOutPoint.Hash + "' AND opindex=" + T.TIn[i].PreviousOutPoint.Index.toString() + ")";
     //     glue = " OR ";
     //   }
-
     //   tx.executeSql('SELECT sum(amount) FROM ' + T.model.module + 'ut_table WHERE tokentype=? AND (' +sql+ ')', [Model.prototype.tokentype2Hex(tokentype)], function (tx, res) {
     //     var res = SentenceSql(res);
     //     resolve(res.rows[0]['sum(amount)']);
     //   });
     // }));
   }
-  
-  outputOf (tokenType: any) {
+
+  outputOf(tokenType: any) {
     let sum = BigInt(0);
     for (let i = 0; i < this.tOut.length; i++) {
       if (this.tOut[i].isSeparator() || this.tOut[i].tokenType !== tokenType) {

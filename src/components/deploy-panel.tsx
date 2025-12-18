@@ -1,25 +1,25 @@
-"use client";
+'use client';
 
-import { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
+import {useState, useEffect} from 'react';
+import {Button} from '@/components/ui/button';
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+} from '@/components/ui/card';
+import {Input} from '@/components/ui/input';
+import {Label} from '@/components/ui/label';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+} from '@/components/ui/select';
+import {Badge} from '@/components/ui/badge';
+import {Alert, AlertDescription} from '@/components/ui/alert';
 import {
   RocketIcon,
   FuelIcon as GasIcon,
@@ -29,22 +29,22 @@ import {
   FileIcon,
   ChevronDown,
   ChevronUp,
-} from "lucide-react";
-import type { FileType } from "@/lib/types";
-import { ChainType, CHAIN_INFO } from "@/constants";
-import { useRootStore } from "@/state";
-import { settingsStore } from "@/state/settings";
-import { CompiledResult } from "@/lib/types";
-import { toast } from "sonner";
-import { MsgT } from "@/utils/msgTools";
-import { rpcClient } from "@/lib/api";
-import { bytesToHex2 } from "@/utils/index";
-import { TinDef, ToutDef } from "@/utils/defs";
+} from 'lucide-react';
+import type {FileType} from '@/lib/types';
+import {ChainType, CHAIN_INFO} from '@/constants';
+import {useRootStore} from '@/state';
+import {settingsStore} from '@/state/settings';
+import type {CompiledResult} from '@/lib/types';
+import {toast} from 'sonner';
+import {MsgT} from '@/utils/msgTools';
+import {rpcClient} from '@/lib/api';
+import {bytesToHex2} from '@/utils/index';
+import {TinDef, ToutDef} from '@/utils/defs';
 import {
-  DeployedContractCardProps,
+  type DeployedContractCardProps,
   DeployedContractCard,
-} from "./deployeContractCard";
-import { Address } from "@/utils/address";
+} from './deployeContractCard';
+import {Address} from '@/utils/address';
 
 interface DeployPanelProps {
   files: FileType[];
@@ -55,15 +55,15 @@ export default function DeployPanel({
   files,
   compiledResultMap,
 }: DeployPanelProps) {
-  const { chainType } = useRootStore().settings;
+  const {chainType} = useRootStore().settings;
   const [isDeploying, setIsDeploying] = useState(false);
   const [deploymentResult, setDeploymentResult] = useState<string | null>(null);
-  const [privateKey, setPrivateKey] = useState("");
-  const [utxo, setUtxo] = useState("");
+  const [privateKey, setPrivateKey] = useState('');
+  const [utxo, setUtxo] = useState('');
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
 
-  const cFiles = files.filter((file) => file.name.endsWith(".c"));
-  const selectedFile = files.find((file) => file.id === selectedFileId) || null;
+  const cFiles = files.filter(file => file.name.endsWith('.c'));
+  const selectedFile = files.find(file => file.id === selectedFileId) || null;
 
   // const [deployedContracts, setDeployedContracts] = useState<
   //   Map<string, DeployedContractCardProps[]>
@@ -74,15 +74,15 @@ export default function DeployPanel({
   >(() => {
     return new Map([
       [
-        "storage.c",
+        'storage.c',
         [
           {
-            contractAddress: "0x1234567890123456789012345678901234567890",
+            contractAddress: '0x1234567890123456789012345678901234567890',
             abi: JSON.stringify({
-              "void store(int num)": "xb792d88c",
-              "void retrieve()": "x60352ae4",
+              'void store(int num)': 'xb792d88c',
+              'void retrieve()': 'x60352ae4',
             }),
-            contractName: "storage.c",
+            contractName: 'storage.c',
           },
         ],
       ],
@@ -95,8 +95,8 @@ export default function DeployPanel({
 
   // Auto-select first .c file if none selected and files are available
   useEffect(() => {
-    const deployedContracts = deployedContractsMap.get(selectedFileId || "");
-    console.log("deployedContracts", deployedContracts);
+    const deployedContracts = deployedContractsMap.get(selectedFileId || '');
+    console.log('deployedContracts', deployedContracts);
     if (deployedContracts) {
       setCurrentDeployedContract(deployedContracts);
     }
@@ -106,7 +106,7 @@ export default function DeployPanel({
   }, [selectedFileId]);
 
   const handleContractSelect = (fileId: string) => {
-    console.log("fileId", fileId);
+    console.log('fileId', fileId);
     setSelectedFileId(fileId);
   };
 
@@ -114,37 +114,37 @@ export default function DeployPanel({
     useState(true);
 
   const handleDeploy = async () => {
-    if (!selectedFile || !selectedFile.name.endsWith(".c")) {
-      toast.error("Please select a contract to deploy");
+    if (!selectedFile || !selectedFile.name.endsWith('.c')) {
+      toast.error('Please select a contract to deploy');
       return;
     }
 
     if (!privateKey || !utxo) {
-      toast.error("Please enter a private key and UTXO");
+      toast.error('Please enter a private key and UTXO');
       return;
     }
 
-    if (!utxo.includes(":")) {
-      toast.error("Please enter a valid UTXO");
+    if (!utxo.includes(':')) {
+      toast.error('Please enter a valid UTXO');
       return;
     }
-    const [hash, index] = utxo.split(":");
+    const [hash, index] = utxo.split(':');
     if (!hash || !index) {
-      toast.error("Please enter a valid UTXO");
+      toast.error('Please enter a valid UTXO');
       return;
     }
 
     const result = compiledResultMap.get(selectedFile.name);
     if (!result) {
-      toast.error("Please compile the contract first");
+      toast.error('Please compile the contract first');
       return;
     }
-    console.log("compiledResult", result);
+    console.log('compiledResult', result);
 
     setIsDeploying(true);
     setDeploymentResult(null);
 
-    const script = "88" + result.hash + "00000000" + result.bytecode;
+    const script = '88' + result.hash + '00000000' + result.bytecode;
 
     const msg = new MsgT();
     msg.version = 0x11;
@@ -166,7 +166,7 @@ export default function DeployPanel({
     toutDef.pkScript = script;
 
     const fee = 1200 + script.length * 1000;
-    console.log("fee", fee);
+    console.log('fee', fee);
 
     const changeToutDef = new ToutDef();
     changeToutDef.tokenType = 0n;
@@ -174,13 +174,13 @@ export default function DeployPanel({
     const changeAmount = dummyInputUtxoValue - BigInt(fee);
 
     if (changeAmount < 0n) {
-      toast.error("Insufficient funds for deployment and fee.");
+      toast.error('Insufficient funds for deployment and fee.');
       setIsDeploying(false);
       return;
     }
     changeToutDef.value = changeAmount;
     changeToutDef.pkScript = Address.toPkScript(
-      "mszzWYjHEpmGx2LmdZLtud64PADqFHNhHD"
+      'mszzWYjHEpmGx2LmdZLtud64PADqFHNhHD',
     );
 
     msg.tOut.push(toutDef, changeToutDef);
@@ -194,22 +194,22 @@ export default function DeployPanel({
       .getClient(chainType)
       .signRawTransaction(rawTxHex, [], [privateKey], false);
     if (!signedTx.hex) {
-      toast.error("Sign raw transaction failed");
+      toast.error('Sign raw transaction failed');
       setIsDeploying(false);
       return;
     }
-    console.log("sign raw transaction result", signedTx);
+    console.log('sign raw transaction result', signedTx);
 
     // sendrawtransaction
     const txHash = await rpcClient
       .getClient(chainType)
       .sendRawTransaction(signedTx.hex);
     if (!txHash) {
-      toast.error("Send raw transaction failed");
+      toast.error('Send raw transaction failed');
       setIsDeploying(false);
       return;
     }
-    console.log("txHash", txHash);
+    console.log('txHash', txHash);
     setIsDeploying(false);
 
     // After successful deployment
@@ -218,21 +218,20 @@ export default function DeployPanel({
       abi: result.abi,
       contractName: selectedFile.name,
     };
-    setDeployedContractsMap((prev) => {
+    setDeployedContractsMap(prev => {
       const newMap = new Map(prev);
       const contracts = newMap.get(selectedFile.name) || [];
       newMap.set(selectedFile.name, [...contracts, newContract]);
       return newMap;
     });
 
-    toast.success("Transaction sent successfully");
+    toast.success('Transaction sent successfully');
 
     // Auto-generate template JS after successful deployment
     try {
-      const { generateContractTemplate } = await import(
-        "@/utils/templateGenerator"
-      );
-      const { saveFile, createFolder } = await import("@/lib/db");
+      const {generateContractTemplate} =
+        await import('@/utils/templateGenerator');
+      const {saveFile, createFolder} = await import('@/lib/db');
 
       const abiObj = JSON.parse(result.abi);
       const abiWithAddress = {
@@ -241,10 +240,10 @@ export default function DeployPanel({
       };
 
       const templateCode = generateContractTemplate(abiWithAddress);
-      const filename = `${selectedFile.name.replace(".c", "")}_runner.js`;
+      const filename = `${selectedFile.name.replace('.c', '')}_runner.js`;
 
       // Ensure .build directory exists
-      const buildDir = "/.build";
+      const buildDir = '/.build';
       try {
         await createFolder(buildDir);
       } catch (e) {
@@ -262,17 +261,17 @@ export default function DeployPanel({
         lastModified: new Date().toISOString(),
       });
 
-      toast.success("Template generated", {
+      toast.success('Template generated', {
         description: `Saved to .build/${filename}`,
       });
     } catch (error) {
-      console.error("Failed to auto-generate template:", error);
+      console.error('Failed to auto-generate template:', error);
       // Don't show error toast since deployment was successful
     }
   };
 
   const handleSetChainType = (chainType: ChainType) => {
-    settingsStore.setState({ chainType });
+    settingsStore.setState({chainType});
   };
 
   return (
@@ -313,13 +312,13 @@ export default function DeployPanel({
             <Input
               type="text"
               value={privateKey}
-              onChange={(e) => setPrivateKey(e.target.value)}
+              onChange={e => setPrivateKey(e.target.value)}
               placeholder="Enter your wallet private key"
             />
             <Input
               type="text"
               value={utxo}
-              onChange={(e) => setUtxo(e.target.value)}
+              onChange={e => setUtxo(e.target.value)}
               placeholder="Enter UTXO"
             />
           </div>
@@ -332,7 +331,7 @@ export default function DeployPanel({
           <CardDescription>
             {selectedFile
               ? `Ready to deploy: ${selectedFile.name}`
-              : "Select a C file to deploy"}
+              : 'Select a C file to deploy'}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -340,14 +339,14 @@ export default function DeployPanel({
             <div className="space-y-2">
               <Label>Available Contracts</Label>
               <Select
-                value={selectedFileId || cFiles[0].id}
+                value={selectedFileId || cFiles[0]!.id}
                 onValueChange={handleContractSelect}
               >
                 <SelectTrigger className="h-8">
                   <SelectValue placeholder="Select a file..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {cFiles.map((file) => (
+                  {cFiles.map(file => (
                     <SelectItem key={file.id} value={file.id}>
                       <div className="flex items-center gap-2">
                         <FileIcon className="h-3 w-3" />
@@ -428,7 +427,7 @@ export default function DeployPanel({
             <pre className="whitespace-pre-wrap text-xs font-mono bg-muted p-2 rounded">
               {deploymentResult}
             </pre>
-            {deploymentResult.includes("successful") && (
+            {deploymentResult.includes('successful') && (
               <Button variant="outline" size="sm" className="mt-2">
                 <ExternalLinkIcon className="mr-2 h-4 w-4" />
                 View on Explorer

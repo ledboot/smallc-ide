@@ -1,4 +1,4 @@
-import LightningFS from "@isomorphic-git/lightning-fs";
+import LightningFS from '@isomorphic-git/lightning-fs';
 
 /**
  * IndexedDB-backed file system using lightning-fs
@@ -18,20 +18,20 @@ export class IndexedDBStorage extends LightningFS {
     stat: (path: string) => Promise<any>;
   };
 
-  constructor(name: string = "SmallCFileSystem") {
+  constructor(name: string = 'SmallCFileSystem') {
     super(name);
     this.base = this.promises;
 
     // Helper to ensure paths start with '/'
     const addSlash = (file: string) => {
-      if (!file.startsWith("/")) file = "/" + file;
+      if (!file.startsWith('/')) file = '/' + file;
       return file;
     };
 
     // Extended API with path normalization
     this.extended = {
       exists: async (path: string) => {
-        return new Promise((resolve) => {
+        return new Promise(resolve => {
           this.base
             .stat(addSlash(path))
             .then(() => resolve(true))
@@ -68,13 +68,13 @@ export class IndexedDBStorage extends LightningFS {
   /**
    * Initialize the file system
    */
-  async init(): Promise<void> {
+  override async init(): Promise<void> {
     // Ensure root directory exists
     try {
-      await this.extended.stat("/");
+      await this.extended.stat('/');
     } catch (e) {
       // Root should always exist, but just in case
-      console.warn("Root directory check failed:", e);
+      console.warn('Root directory check failed:', e);
     }
   }
 }
@@ -87,7 +87,7 @@ let fsInstance: IndexedDBStorage | null = null;
  */
 export const getFS = async (): Promise<IndexedDBStorage> => {
   if (!fsInstance) {
-    fsInstance = new IndexedDBStorage("SmallCFileSystem");
+    fsInstance = new IndexedDBStorage('SmallCFileSystem');
     await fsInstance.init();
   }
   return fsInstance;
@@ -99,15 +99,15 @@ export const getFS = async (): Promise<IndexedDBStorage> => {
 export const testIndexedDB = async (): Promise<boolean> => {
   return new Promise((resolve, reject) => {
     if (!window.indexedDB) {
-      reject(new Error("No indexedDB on window"));
+      reject(new Error('No indexedDB on window'));
       return;
     }
-    const request = window.indexedDB.open("SmallCTestDB");
+    const request = window.indexedDB.open('SmallCTestDB');
     request.onerror = () => {
-      reject(new Error("Error creating test database"));
+      reject(new Error('Error creating test database'));
     };
     request.onsuccess = () => {
-      window.indexedDB.deleteDatabase("SmallCTestDB");
+      window.indexedDB.deleteDatabase('SmallCTestDB');
       resolve(true);
     };
   });

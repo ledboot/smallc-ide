@@ -34,7 +34,7 @@ function readInt32(hex: string, offset: number): [number, number] {
   const b3 = parseInt(hex.slice(offset + 6, offset + 8), 16);
   let val = b0 + (b1 << 8) + (b2 << 16) + (b3 << 24);
   // 处理负数
-  if (val & 0x80000000) val = val | (~0xFFFFFFFF);
+  if (val & 0x80000000) val = val | ~0xffffffff;
   return [val, offset + 8];
 }
 
@@ -49,8 +49,10 @@ function readUInt64LE(hex: string, offset: number): [string, number] {
 function readVarInt(hex: string, offset: number): [number, number] {
   const first = parseInt(hex.slice(offset, offset + 2), 16);
   if (first < 0xfd) return [first, offset + 2];
-  if (first === 0xfd) return [parseInt(hex.slice(offset + 2, offset + 6), 16), offset + 6];
-  if (first === 0xfe) return [parseInt(hex.slice(offset + 2, offset + 10), 16), offset + 10];
+  if (first === 0xfd)
+    return [parseInt(hex.slice(offset + 2, offset + 6), 16), offset + 6];
+  if (first === 0xfe)
+    return [parseInt(hex.slice(offset + 2, offset + 10), 16), offset + 10];
   if (first === 0xff) throw new Error('VarInt 0xff not supported');
   throw new Error('Invalid VarInt');
 }
@@ -60,7 +62,7 @@ function hashreverse(hex: string): string {
 }
 
 export function parseRawTx(hex: string): DecodedTx {
-  hex = hex.toLocaleLowerCase()
+  hex = hex.toLocaleLowerCase();
   let offset = 0;
   // 1. Version
   const [version, off1] = readInt32(hex, offset);
@@ -87,7 +89,7 @@ export function parseRawTx(hex: string): DecodedTx {
     offset = off5;
     const [sequence, off6] = readInt32(hex, offset);
     offset = off6;
-    txIns.push({ prevHash, prevIndex, sigIndex, sequence });
+    txIns.push({prevHash, prevIndex, sigIndex, sequence});
   }
   // 4. TxOut
   const [txOutCount, off7] = readVarInt(hex, offset);
@@ -116,7 +118,7 @@ export function parseRawTx(hex: string): DecodedTx {
     offset = off10;
     const pkScript = hex.slice(offset, offset + pkScriptLen * 2);
     offset += pkScriptLen * 2;
-    txOuts.push({ tokenType, value, rights, pkScript });
+    txOuts.push({tokenType, value, rights, pkScript});
   }
   // 5. LockTime
   let lockTime: number | undefined = undefined;
@@ -136,5 +138,5 @@ export function parseRawTx(hex: string): DecodedTx {
     offset += sigLen * 2;
     sigs.push(sig);
   }
-  return { version, txDef, txIns, txOuts, lockTime, sigs };
-} 
+  return {version, txDef, txIns, txOuts, lockTime, sigs};
+}

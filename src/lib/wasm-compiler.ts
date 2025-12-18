@@ -1,9 +1,9 @@
-import type { FileType } from "./types";
+import type {FileType} from './types';
 
 interface CompileResult {
   code: number;
   output: string;
-  outputFiles: { name: string; content: string }[];
+  outputFiles: {name: string; content: string}[];
 }
 
 class CompilerService {
@@ -11,10 +11,10 @@ class CompilerService {
   private isReady = false;
   private pendingResolve: ((value: CompileResult) => void) | null = null;
   private pendingReject: ((reason: any) => void) | null = null;
-  private outputBuffer = "";
+  private outputBuffer = '';
 
   constructor() {
-    if (typeof window !== "undefined") {
+    if (typeof window !== 'undefined') {
       // Lazy init in initWasmCompiler
     }
   }
@@ -25,27 +25,27 @@ class CompilerService {
     return new Promise((resolve, reject) => {
       try {
         this.worker = new Worker(
-          new URL("../workers/compiler.worker.js", import.meta.url)
+          new URL('../workers/compiler.worker.js', import.meta.url),
         );
 
-        this.worker.onmessage = (e) => {
-          const { type, data, result, error } = e.data;
+        this.worker.onmessage = e => {
+          const {type, data, result, error} = e.data;
 
           switch (type) {
-            case "READY":
+            case 'READY':
               this.isReady = true;
-              console.log("Compiler Worker is ready");
+              console.log('Compiler Worker is ready');
               resolve();
               break;
-            case "STDOUT":
-              this.outputBuffer += data + "\n";
-              console.log("[WASM]:", data);
+            case 'STDOUT':
+              this.outputBuffer += data + '\n';
+              console.log('[WASM]:', data);
               break;
-            case "STDERR":
-              this.outputBuffer += "Error: " + data + "\n";
-              console.warn("[WASM Err]:", data);
+            case 'STDERR':
+              this.outputBuffer += 'Error: ' + data + '\n';
+              console.warn('[WASM Err]:', data);
               break;
-            case "COMPILE_DONE":
+            case 'COMPILE_DONE':
               if (this.pendingResolve) {
                 this.pendingResolve({
                   code: result.code,
@@ -55,7 +55,7 @@ class CompilerService {
               }
               this.cleanup();
               break;
-            case "COMPILE_ERROR":
+            case 'COMPILE_ERROR':
               if (this.pendingReject) {
                 this.pendingReject(new Error(error));
               }
@@ -64,8 +64,8 @@ class CompilerService {
           }
         };
 
-        this.worker.onerror = (e) => {
-          console.error("Worker error:", e);
+        this.worker.onerror = e => {
+          console.error('Worker error:', e);
           reject(e);
         };
       } catch (e) {
@@ -82,7 +82,7 @@ class CompilerService {
 
   public async compile(
     files: FileType[],
-    args: string[]
+    args: string[],
   ): Promise<CompileResult> {
     if (!this.worker) await this.init();
 
@@ -91,27 +91,27 @@ class CompilerService {
       // Simple poll
       let retries = 0;
       while (!this.isReady && retries < 20) {
-        await new Promise((r) => setTimeout(r, 100));
+        await new Promise(r => setTimeout(r, 100));
         retries++;
       }
-      if (!this.isReady) throw new Error("Compiler worker not ready");
+      if (!this.isReady) throw new Error('Compiler worker not ready');
     }
 
     return new Promise((resolve, reject) => {
       if (this.pendingResolve) {
-        reject(new Error("Compilation already in progress"));
+        reject(new Error('Compilation already in progress'));
         return;
       }
 
       this.pendingResolve = resolve;
       this.pendingReject = reject;
-      this.outputBuffer = "";
+      this.outputBuffer = '';
 
       this.worker?.postMessage({
-        type: "COMPILE",
+        type: 'COMPILE',
         payload: {
           args: args,
-          files: files.map((f) => ({ name: f.name, content: f.content })),
+          files: files.map(f => ({name: f.name, content: f.content})),
         },
       });
     });

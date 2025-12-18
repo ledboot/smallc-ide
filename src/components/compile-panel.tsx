@@ -1,41 +1,39 @@
-"use client";
+'use client';
 
-import { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {useState, useEffect} from 'react';
+import {Button} from '@/components/ui/button';
+import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+} from '@/components/ui/select';
+import {Label} from '@/components/ui/label';
+import {Badge} from '@/components/ui/badge';
+import {Alert, AlertDescription} from '@/components/ui/alert';
 import {
   PlayIcon,
   AlertCircleIcon,
   CheckCircleIcon,
   InfoIcon,
   FileIcon,
-  Copy,
   Bug,
-} from "lucide-react";
-import { Switch } from "@/components/ui/switch";
-import type { CompiledResult, FileType } from "@/lib/types";
-import { compilerService, isWasmReady } from "@/lib/wasm-compiler";
-import { createFolder, getFile, saveFile } from "@/lib/db";
-import { toast } from "sonner";
+} from 'lucide-react';
+import {Switch} from '@/components/ui/switch';
+import type {CompiledResult, FileType} from '@/lib/types';
+import {compilerService, isWasmReady} from '@/lib/wasm-compiler';
+import {createFolder, getFile, saveFile} from '@/lib/db';
+import {toast} from 'sonner';
 
-import { Asm } from "@/lib/asm";
+import {Asm} from '@/lib/asm';
 
-import { generateContractTemplate } from "@/utils/templateGenerator";
-import { runContractMethod } from "@/utils/contractRunner";
-import { useConsoleStore } from "@/lib/console-store";
-import { LogLevel } from "@/lib/console-store";
-import { rpcClient } from "@/lib/api";
-import { useRootStore } from "@/state";
+import {generateContractTemplate} from '@/utils/templateGenerator';
+import {runContractMethod} from '@/utils/contractRunner';
+import {useConsoleStore} from '@/lib/console-store';
+import {rpcClient} from '@/lib/api';
+import {useRootStore} from '@/state';
 
 interface CompilePanelProps {
   files: FileType[];
@@ -50,33 +48,33 @@ export default function CompilePanel({
   setCompiledResultMap,
   refreshFiles,
 }: CompilePanelProps) {
-  const [selectedFile, setSelectedFile] = useState<string>("");
+  const [selectedFile, setSelectedFile] = useState<string>('');
   const [isCompiling, setIsCompiling] = useState(false);
   const [compilationSuccess, setCompilationSuccess] = useState<boolean | null>(
-    null
+    null,
   );
 
   const [compiledData, setCompiledData] = useState<CompiledResult | null>(null);
   const [debugMode, setDebugMode] = useState(false);
 
-  const { addLog } = useConsoleStore();
-  const { chainType } = useRootStore().settings;
+  const {addLog} = useConsoleStore();
+  const {chainType} = useRootStore().settings;
 
   // Filter out .c and .ts files
   const sourceFiles = files.filter(
-    (file) => file.name.endsWith(".c") || file.name.endsWith(".ts")
+    file => file.name.endsWith('.c') || file.name.endsWith('.ts'),
   );
 
   // Automatically select first file
   useEffect(() => {
     if (sourceFiles.length > 0 && !selectedFile) {
-      setSelectedFile(sourceFiles[0].id);
+      setSelectedFile(sourceFiles[0]!.id);
     }
   }, [sourceFiles, selectedFile]);
 
   useEffect(() => {
-    const file = sourceFiles.find((f) => f.id === selectedFile);
-    console.log("compiledResultMap", compiledResultMap);
+    const file = sourceFiles.find(f => f.id === selectedFile);
+    console.log('compiledResultMap', compiledResultMap);
     if (file) {
       const compiledResult = compiledResultMap.get(file.name);
       if (compiledResult) {
@@ -94,7 +92,7 @@ export default function CompilePanel({
       return;
     }
 
-    const file = sourceFiles.find((f) => f.id === selectedFile);
+    const file = sourceFiles.find(f => f.id === selectedFile);
     if (!file) {
       // setCompilationOutput("Selected file not found");
       setCompilationSuccess(false);
@@ -105,18 +103,42 @@ export default function CompilePanel({
     setCompilationSuccess(null);
 
     // Handle TypeScript files separately
-    if (file.name.endsWith(".ts")) {
+    if (file.name.endsWith('.ts')) {
       try {
-        const rawTx = await runContractMethod(file.content, "store");
-        const result = await rpcClient
+        const rawTx = await runContractMethod(file.content, 'store');
+        if (!rawTx) {
+          return;
+        }
+        console.log('rawTx', rawTx);
+        const privateKey =
+          '';
+        // signrawtransaction
+        const signedTx = await rpcClient
           .getClient(chainType)
-          .sendRawTransaction(rawTx);
-        console.log("result", result);
+          .signRawTransaction(rawTx, [], [privateKey], false);
+        if (!signedTx.hex) {
+          toast.error('Sign raw transaction failed');
+          return;
+        }
+        console.log('sign raw transaction result', signedTx);
+
+        // sendrawtransaction
+        const txHash = await rpcClient
+          .getClient(chainType)
+          .sendRawTransaction(signedTx.hex);
+        if (!txHash) {
+          toast.error('Send raw transaction failed');
+          return;
+        }
+        // const result = await rpcClient
+        //   .getClient(chainType)
+        //   .sendRawTransaction(rawTx);
+        // console.log("result", result);
         setCompilationSuccess(true);
-        toast.success("TypeScript executed successfully");
+        toast.success('TypeScript executed successfully');
       } catch (e) {
         setCompilationSuccess(false);
-        toast.error("Execution failed");
+        toast.error('Execution failed');
       } finally {
         setIsCompiling(false);
       }
@@ -128,16 +150,16 @@ export default function CompilePanel({
       const args = [];
       // 添加--debug参数（如果启用）
       if (debugMode) {
-        args.push("-debug");
+        args.push('-debug');
       }
       args.push(file.name);
 
       const compilationFiles: FileType[] = [];
-      files.some((f) => {
+      files.some(f => {
         if (
-          f.name.endsWith(".c") ||
-          f.name.endsWith(".h") ||
-          f.name.endsWith(".abi")
+          f.name.endsWith('.c') ||
+          f.name.endsWith('.h') ||
+          f.name.endsWith('.abi')
         ) {
           compilationFiles.push(f);
         }
@@ -148,10 +170,10 @@ export default function CompilePanel({
         return;
       }
 
-      console.log("compilationFiles", compilationFiles, "args ", args);
+      console.log('compilationFiles', compilationFiles, 'args ', args);
 
       const result = await compilerService.compile(compilationFiles, args);
-      console.log("compile result", result);
+      console.log('compile result', result);
 
       if (result.code === 0) {
         // setCompilationOutput(
@@ -187,23 +209,23 @@ export default function CompilePanel({
 
   const generateTemplate = async (sourceFile: FileType) => {
     try {
-      const baseName = sourceFile.name.split(".").slice(0, -1).join(".");
+      const baseName = sourceFile.name.split('.').slice(0, -1).join('.');
       const abiFileName = `/${baseName}.abi`;
       const abiFile = await getFile(abiFileName);
-      console.log("abiFile", abiFile);
+      console.log('abiFile', abiFile);
       if (!abiFile) {
-        toast.error("ABI file not found");
+        toast.error('ABI file not found');
         return;
       }
       // Parse ABI to create the template
 
       // Generate template JS
       const templateCode = generateContractTemplate(
-        JSON.parse(abiFile.content)
+        JSON.parse(abiFile.content),
       );
 
       // Ensure .build directory exists
-      const buildDir = "/.build";
+      const buildDir = '/.build';
       try {
         await createFolder(buildDir);
       } catch (e) {
@@ -236,29 +258,29 @@ export default function CompilePanel({
       await saveFile(timestampFile);
       await saveFile(latestFile);
 
-      toast.success("Template generated", {
+      toast.success('Template generated', {
         description: `Saved to .build/${latestFilename}`,
       });
     } catch (error) {
-      console.error("Failed to generate template:", error);
-      toast.error("Failed to generate template", {
-        description: error instanceof Error ? error.message : "Unknown error",
+      console.error('Failed to generate template:', error);
+      toast.error('Failed to generate template', {
+        description: error instanceof Error ? error.message : 'Unknown error',
       });
     }
   };
 
   const processOutputFiles = async (
     sourceFile: FileType,
-    outputFiles: { name: string; content: string }[]
+    outputFiles: {name: string; content: string}[],
   ) => {
-    const baseName = sourceFile.name.split(".").slice(0, -1).join(".");
+    const baseName = sourceFile.name.split('.').slice(0, -1).join('.');
 
-    const asmFile = outputFiles.find((f) => f.name === `${baseName}.asm`);
-    const abiFile = outputFiles.find((f) => f.name === `${baseName}.abi`);
+    const asmFile = outputFiles.find(f => f.name === `${baseName}.asm`);
+    const abiFile = outputFiles.find(f => f.name === `${baseName}.abi`);
 
     if (asmFile && abiFile) {
       const asm = Asm.assemble(asmFile.content);
-      console.log("asm", asm);
+      console.log('asm', asm);
 
       if (asm.success) {
         const compiledResult = compiledResultMap.get(sourceFile.name);
@@ -299,8 +321,8 @@ export default function CompilePanel({
 
   const writeDbgFile = async (fileName: string, dbgContent: string) => {
     const dbgFile: FileType = {
-      id: fileName.split(".")[0] + ".dbg",
-      name: fileName.split(".")[0] + ".dbg",
+      id: fileName.split('.')[0] + '.dbg',
+      name: fileName.split('.')[0] + '.dbg',
       content: dbgContent,
       lastModified: new Date().toISOString(),
     };
@@ -312,10 +334,10 @@ export default function CompilePanel({
       <div className="flex items-center justify-between">
         <h3 className="text-base font-semibold">SmallC Compiler</h3>
         <Badge
-          variant={isWasmReady() ? "default" : "secondary"}
+          variant={isWasmReady() ? 'default' : 'secondary'}
           className="text-xs"
         >
-          {isWasmReady() ? "WASM" : "SIM"}
+          {isWasmReady() ? 'WASM' : 'SIM'}
         </Badge>
       </div>
 
@@ -338,7 +360,7 @@ export default function CompilePanel({
                     <SelectValue placeholder="Choose..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {sourceFiles.map((file) => (
+                    {sourceFiles.map(file => (
                       <SelectItem key={file.id} value={file.id}>
                         <div className="flex items-center gap-2">
                           <FileIcon className="h-3 w-3" />
@@ -389,7 +411,7 @@ export default function CompilePanel({
         ) : (
           <>
             <PlayIcon className="mr-2 h-4 w-4" />
-            {selectedFile.endsWith(".ts") ? "Run TS" : "Compile"}
+            {selectedFile.endsWith('.ts') ? 'Run TS' : 'Compile'}
           </>
         )}
       </Button>
@@ -398,26 +420,26 @@ export default function CompilePanel({
         <Alert
           className={`${
             compilationSuccess
-              ? "border-green-200 bg-green-50"
-              : "border-red-200 bg-red-50"
+              ? 'border-green-200 bg-green-50'
+              : 'border-red-200 bg-red-50'
           }`}
         >
           {compilationSuccess ? (
             <>
               <CheckCircleIcon className="h-4 w-4 text-green-600" />
               <AlertDescription className="text-green-800 text-xs">
-                {selectedFile.endsWith(".ts")
-                  ? "Execution successful!"
-                  : "Compilation successful!"}
+                {selectedFile.endsWith('.ts')
+                  ? 'Execution successful!'
+                  : 'Compilation successful!'}
               </AlertDescription>
             </>
           ) : (
             <>
               <AlertCircleIcon className="h-4 w-4 text-red-600" />
               <AlertDescription className="text-red-800 text-xs">
-                {selectedFile.endsWith(".ts")
-                  ? "Execution failed."
-                  : "Compilation failed."}
+                {selectedFile.endsWith('.ts')
+                  ? 'Execution failed.'
+                  : 'Compilation failed.'}
               </AlertDescription>
             </>
           )}

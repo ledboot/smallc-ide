@@ -36,7 +36,7 @@ const privateKey = "";
 
   // Iterate over ABI entries
   for (const [key, value] of Object.entries(abi)) {
-    if (key === "address" || key === "") continue;
+    if (key === 'address' || key === '') continue;
 
     const signature = key;
     const methodHash = value as string;
@@ -46,9 +46,11 @@ const privateKey = "";
     if (!match) continue;
 
     const methodName = match[1];
+    if (!methodName) continue;
+
     const paramsStr = match[2];
     const params = paramsStr
-      ? paramsStr.split(",").map((p) => p.trim().split(" ")[1])
+      ? paramsStr.split(',').map(p => p.trim().split(' ')[1])
       : [];
 
     mainLogic += `
@@ -56,7 +58,7 @@ const privateKey = "";
  * ${signature}
  * Method Hash: ${methodHash}
  */
-export function ${methodName}() { // Parameters from ABI: ${params.join(", ")}
+export function ${methodName}() { // Parameters from ABI: ${params.join(', ')}
     // --- Developer Implementation ---
     console.log("Generating params for ${methodName}...");
     const methodHex = "${methodHexWithx}";

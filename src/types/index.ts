@@ -1,4 +1,4 @@
-import { NetworkType } from "@/constants";
+import {NetworkType} from '@/constants';
 
 export type ChainInfo = {
   label: string;

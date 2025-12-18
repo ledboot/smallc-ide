@@ -1,14 +1,14 @@
-import { useState } from "react";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Copy, FileCode } from "lucide-react";
-import { toast } from "sonner";
-import { bytesToHex2, hashReverse } from "@/utils/index";
-import { MsgT } from "@/utils/msgTools";
-import { rpcClient } from "@/lib/api";
-import { ToutDef } from "@/utils/defs";
-import { useRootStore } from "@/state";
-import { generateContractTemplate } from "@/utils/templateGenerator";
-import { saveFile, createFolder } from "@/lib/db";
+import {useState} from 'react';
+import {Card, CardContent, CardHeader} from '@/components/ui/card';
+import {Copy, FileCode} from 'lucide-react';
+import {toast} from 'sonner';
+import {bytesToHex2, hashReverse} from '@/utils/index';
+import {MsgT} from '@/utils/msgTools';
+import {rpcClient} from '@/lib/api';
+import {ToutDef} from '@/utils/defs';
+import {useRootStore} from '@/state';
+import {generateContractTemplate} from '@/utils/templateGenerator';
+import {saveFile, createFolder} from '@/lib/db';
 
 export interface ContractMethod {
   signature: string;
@@ -29,10 +29,10 @@ export const DeployedContractCard = ({
   contractName,
 }: DeployedContractCardProps) => {
   const [inputValues, setInputValues] = useState<Record<string, string>>({});
-  const { chainType } = useRootStore().settings;
+  const {chainType} = useRootStore().settings;
 
   const handleInputChange = (methodSignature: string, value: string) => {
-    setInputValues((prev) => ({
+    setInputValues(prev => ({
       ...prev,
       [methodSignature]: value,
     }));
@@ -44,11 +44,22 @@ export const DeployedContractCard = ({
     try {
       const abiObj = JSON.parse(abiString);
       return Object.entries(abiObj)
-        .filter(([key]) => key !== "address" && key !== "")
+        .filter(([key]) => key !== 'address' && key !== '')
         .map(([signature, methodHash]) => {
           // Extract method name from signature (everything before the first parenthesis)
-          const name = signature.split("(")[0].trim().split(" ")[1];
-          const parameters = signature.split("(")[1].split(")")[0].split(",");
+          const partsBeforeParenthesis = signature.split('(')[0]!.trim();
+          const name =
+            partsBeforeParenthesis.split(' ')[1] || partsBeforeParenthesis;
+
+          const paramsPart = signature.split('(')[1];
+          const parameters =
+            paramsPart && paramsPart.includes(')')
+              ? paramsPart
+                  .split(')')[0]!
+                  .split(',')
+                  .map((p: string) => p.trim())
+                  .filter((p: string) => p !== '')
+              : [];
           return {
             name,
             signature,
@@ -57,53 +68,53 @@ export const DeployedContractCard = ({
           };
         });
     } catch (e) {
-      console.error("Failed to parse ABI:", e);
+      console.error('Failed to parse ABI:', e);
       return [];
     }
   };
 
   const hasParameters = (method: ContractMethod) => {
     return (
-      method.signature.includes("(") &&
-      !method.signature.endsWith("()") &&
-      !method.signature.endsWith("( )")
+      method.signature.includes('(') &&
+      !method.signature.endsWith('()') &&
+      !method.signature.endsWith('( )')
     );
   };
 
   const handleMethodClick = (method: ContractMethod) => async () => {
     const inputParams = inputValues[method.signature];
     const defParams = method.parameters;
-    if (defParams.length !== inputParams.split(",").length) {
-      toast.error("Parameter count mismatch");
+    if (defParams.length !== (inputParams || '').split(',').length) {
+      toast.error('Parameter count mismatch');
       return;
     }
     console.log(
       `Calling ${method.signature} with params:`,
       inputParams,
-      "defParams",
-      defParams
+      'defParams',
+      defParams,
     );
     // TODO: Implement actual contract method call
-    const params = inputParams.split(",");
+    const params = (inputParams || '').split(',');
 
     const toAddress = contractAddress;
     const ops: Record<string, string> = {
-      "00": "41000000",
-      "6f": "41000000",
-      "3f": "41000000",
-      "7b": "42000000",
-      c4: "42000000",
-      "05": "42000000",
-      "78": "43000000",
-      "67": "43000000",
-      "60": "43000000",
-      "88": "",
+      '00': '41000000',
+      '6f': '41000000',
+      '3f': '41000000',
+      '7b': '42000000',
+      'c4': '42000000',
+      '05': '42000000',
+      '78': '43000000',
+      '67': '43000000',
+      '60': '43000000',
+      '88': '',
     };
     const pkScript = `${toAddress}${ops[toAddress.slice(0, 2).toLowerCase()]}`;
 
     const amount = BigInt(1);
     // $t = sprintf("%s%s%s%s%s", rev64(sprintf("%016x", $amount)), rev64(sprintf("%016x", 12+24)), rev64(sprintf("%016x", 12+24+25)), $pkScript, $sig);
-    const amountHex = Number(amount).toString(16).padStart(16, "0");
+    const amountHex = Number(amount).toString(16).padStart(16, '0');
     const revAmountHex = hashReverse(amountHex); // rev64(sprintf("%016x", $amount))
 
     // const txData = `${revAmount}${revPkScript}`;
@@ -118,7 +129,7 @@ export const DeployedContractCard = ({
     const toutDef = new ToutDef();
     toutDef.tokenType = 0n;
     toutDef.value = 0n;
-    toutDef.pkScript = "88" + contractAddress + txData;
+    toutDef.pkScript = '88' + contractAddress + txData;
     msg.tOut.push(toutDef);
     msg.lockTime = 0;
     msg.signatureScripts = [];
@@ -128,10 +139,10 @@ export const DeployedContractCard = ({
       .getClient(chainType)
       .contractCall(toAddress, rawTxHex);
     if (err) {
-      toast.error("Contract call failed", { description: err });
+      toast.error('Contract call failed', {description: err});
       return;
     }
-    console.log("result", result);
+    console.log('result', result);
   };
 
   const handleGenerateTemplate = async () => {
@@ -147,7 +158,7 @@ export const DeployedContractCard = ({
       const templateCode = generateContractTemplate(abiWithAddress);
 
       // Ensure .build directory exists
-      const buildDir = "/.build";
+      const buildDir = '/.build';
       try {
         await createFolder(buildDir);
       } catch (e) {
@@ -155,7 +166,7 @@ export const DeployedContractCard = ({
       }
 
       // Save to .build directory
-      const filename = `${contractName.replace(".c", "")}_runner.js`;
+      const filename = `${contractName.replace('.c', '')}_runner.js`;
       const filePath = `${buildDir}/${filename}`;
       await saveFile({
         id: filePath,
@@ -166,13 +177,13 @@ export const DeployedContractCard = ({
         lastModified: new Date().toISOString(),
       });
 
-      toast.success("Template generated", {
+      toast.success('Template generated', {
         description: `Saved to .build/${filename}`,
       });
     } catch (error) {
-      console.error("Failed to generate template:", error);
-      toast.error("Failed to generate template", {
-        description: error instanceof Error ? error.message : "Unknown error",
+      console.error('Failed to generate template:', error);
+      toast.error('Failed to generate template', {
+        description: error instanceof Error ? error.message : 'Unknown error',
       });
     }
   };
@@ -202,7 +213,7 @@ export const DeployedContractCard = ({
               className="w-3 h-3 font-mono hover:text-blue-500 hover:cursor-pointer"
               onClick={() => {
                 navigator.clipboard.writeText(contractAddress);
-                toast.success("Address copied to clipboard");
+                toast.success('Address copied to clipboard');
               }}
             />
           </div>
@@ -217,7 +228,9 @@ export const DeployedContractCard = ({
                 <div className="flex items-center space-x-2">
                   <button
                     onClick={() => handleMethodClick(method)}
-                    className={`px-3 py-1.5 text-xs cursor-pointer font-mono rounded bg-gray-700 hover:bg-gray-600 text-gray-200`}
+                    className={
+                      'px-3 py-1.5 text-xs cursor-pointer font-mono rounded bg-gray-700 hover:bg-gray-600 text-gray-200'
+                    }
                   >
                     {method.name}
                   </button>
@@ -226,13 +239,13 @@ export const DeployedContractCard = ({
                     <>
                       <input
                         type="text"
-                        value={inputValues[method.signature] || ""}
-                        onChange={(e) =>
+                        value={inputValues[method.signature] || ''}
+                        onChange={e =>
                           handleInputChange(method.signature, e.target.value)
                         }
                         className="flex-1 px-2 py-1.5 text-xs border border-gray-600 rounded text-black placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
                         placeholder={
-                          method.signature.match(/\(([^)]+)\)/)?.[1] || "value"
+                          method.signature.match(/\(([^)]+)\)/)?.[1] || 'value'
                         }
                       />
                     </>

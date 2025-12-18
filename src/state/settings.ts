@@ -1,6 +1,6 @@
-import { create } from "zustand";
-import { createJSONStorage, persist } from "zustand/middleware";
-import { ChainType, NetworkType } from "../constants";
+import {create} from 'zustand';
+import {createJSONStorage, persist} from 'zustand/middleware';
+import {ChainType, NetworkType} from '../constants';
 
 export interface SettingsState {
   locale: string;
@@ -9,21 +9,22 @@ export interface SettingsState {
 }
 
 const initialState: SettingsState = {
-  locale: "en",
+  locale: 'en',
   networkType: NetworkType.TESTNET,
   chainType: ChainType.ZENT_TESTNET,
 };
 
-
-export const settingsStore = create(persist<SettingsState>(
-  (set) => ({
-    ...initialState,
-    setLocale: (locale: string) => set({ locale }),
-    setNetworkType: (networkType: NetworkType) => set({ networkType }),
-    setChainType: (chainType: ChainType) => set({ chainType }),
-  }),
-  {
-    name: "settings",
-    storage: createJSONStorage(() => localStorage),
-  }
-));
+export const settingsStore = create(
+  persist<SettingsState>(
+    set => ({
+      ...initialState,
+      setLocale: (locale: string) => set({locale}),
+      setNetworkType: (networkType: NetworkType) => set({networkType}),
+      setChainType: (chainType: ChainType) => set({chainType}),
+    }),
+    {
+      name: 'settings',
+      storage: createJSONStorage(() => localStorage),
+    },
+  ),
+);
