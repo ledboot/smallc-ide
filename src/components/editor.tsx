@@ -1,16 +1,15 @@
 'use client';
 
 import {useEffect, useRef} from 'react';
-import type {Breakpoint, CompiledResult, FileType} from '@/lib/types';
+import type {Breakpoint, FileType} from '@/lib/types';
 import {saveFile} from '@/lib/db';
 import {Editor as MonacoEditor} from '@monaco-editor/react';
+import {useCompilerStore} from '@/state/compiler';
 import * as monaco from 'monaco-editor';
 
 interface EditorProps {
   file: FileType;
   updateFile: (content: string) => void;
-  compiledResultMap: Map<string, CompiledResult>;
-  setCompiledResultMap: (map: Map<string, CompiledResult>) => void;
   // onBreakpointsChange?: (breakpoints: Breakpoint[]) => void
   currentLine?: number;
 }
@@ -18,14 +17,16 @@ interface EditorProps {
 export default function Editor({
   file,
   updateFile,
-  compiledResultMap,
-  setCompiledResultMap,
   // onBreakpointsChange,
   currentLine,
 }: EditorProps) {
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<typeof monaco | null>(null);
+  const compiledResultMap = useCompilerStore(state => state.compiledResultMap);
+  const removeCompiledResult = useCompilerStore(
+    state => state.removeCompiledResult,
+  );
 
   const getLanguage = (fileName: string, id: string) => {
     if (id === 'home') return 'plaintext';
@@ -192,9 +193,7 @@ export default function Editor({
       });
 
       if (compiledResultMap.has(file.name)) {
-        const newMap = new Map(compiledResultMap);
-        newMap.delete(file.name);
-        setCompiledResultMap(newMap);
+        removeCompiledResult(file.name);
       }
     }, 500);
   };

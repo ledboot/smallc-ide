@@ -32,21 +32,15 @@ import {runContractMethod} from '@/utils/contractRunner';
 import {useConsoleStore} from '@/lib/console-store';
 import {rpcClient} from '@/lib/api';
 import {useRootStore} from '@/state';
+import {useCompilerStore} from '@/state/compiler';
 import {Input} from './ui/input';
 
 interface CompilePanelProps {
   files: FileType[];
-  compiledResultMap: Map<string, CompiledResult>;
-  setCompiledResultMap: (map: Map<string, CompiledResult>) => void;
   refreshFiles?: () => Promise<void>;
 }
 
-export default function CompilePanel({
-  files,
-  compiledResultMap,
-  setCompiledResultMap,
-  refreshFiles,
-}: CompilePanelProps) {
+export default function CompilePanel({files, refreshFiles}: CompilePanelProps) {
   const [selectedFile, setSelectedFile] = useState<string>('');
   const [isCompiling, setIsCompiling] = useState(false);
   const [compilationSuccess, setCompilationSuccess] = useState<boolean | null>(
@@ -58,6 +52,8 @@ export default function CompilePanel({
 
   const {addLog} = useConsoleStore();
   const {chainType} = useRootStore().settings;
+  const compiledResultMap = useCompilerStore(state => state.compiledResultMap);
+  const setCompiledResult = useCompilerStore(state => state.setCompiledResult);
   const [executeMethod, setExecuteMethod] = useState('');
 
   // Filter out .c and .ts files
@@ -283,10 +279,10 @@ export default function CompilePanel({
       console.log('asm', asm);
 
       if (asm.success) {
-        const compiledResult = compiledResultMap.get(sourceFile.name);
-        if (compiledResult) {
-          compiledResultMap.delete(sourceFile.name);
-        }
+        // const compiledResult = compiledResultMap.get(sourceFile.name);
+        // if (compiledResult) {
+        //   compiledResultMap.delete(sourceFile.name);
+        // }
         const abiContent = JSON.parse(abiFile.content);
         abiContent.address = asm.hash;
         abiFile.content = JSON.stringify(abiContent);
@@ -295,13 +291,11 @@ export default function CompilePanel({
           await writeDbgFile(sourceFile.name, asm.debugInfo);
         }
 
-        const newMap = new Map(compiledResultMap);
-        newMap.set(sourceFile.name, {
+        setCompiledResult(sourceFile.name, {
           bytecode: asm.bytecode,
           abi: abiFile.content,
           hash: asm.hash,
         });
-        setCompiledResultMap(newMap);
       }
       // 保存所有输出文件到DB
       await saveFile({

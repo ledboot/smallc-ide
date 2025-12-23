@@ -15,6 +15,9 @@ import {
 import {useRootStore} from '@/state';
 import {rpcClient} from '@/lib/api';
 import {toast} from 'sonner';
+import {runContractMethod} from '@/utils/contractRunner';
+import {getFile} from '@/lib/db';
+import {PlayIcon} from 'lucide-react';
 import type {FileType} from '@/lib/types';
 import {
   Tooltip,
@@ -79,6 +82,54 @@ export default function DebugPanel({files, setCurrentFile}: DebugPanelProps) {
   const selectedFile = files.find(file => file.id === selectedFileId) || null;
 
   const [transactionHash, setTransactionHash] = useState<string>('');
+  const [latestRunData, setLatestRunData] = useState<any>(null);
+
+  useEffect(() => {
+    const fetchRunData = async () => {
+      if (!selectedFile) {
+        setLatestRunData(null);
+        return;
+      }
+      try {
+        const runLatestPath = `/.broadcast/${selectedFile.name}/run-latest.json`;
+        const file = await getFile(runLatestPath);
+        if (file) {
+          setLatestRunData(JSON.parse(file.content));
+        } else {
+          setLatestRunData(null);
+        }
+      } catch (e) {
+        console.error('Failed to load run data', e);
+        setLatestRunData(null);
+      }
+    };
+    fetchRunData();
+  }, [selectedFile]);
+
+  const handleMethodCall = async (methodSignature: string) => {
+    if (!latestRunData || !latestRunData.tsFile) return;
+
+    // Extract method name: "void setTotal(long total)" -> "setTotal"
+    const match = methodSignature.match(/\s*(\w+)\s*\(/);
+    const methodName = match ? match[1] : null;
+
+    if (!methodName) {
+      toast.error('Invalid method signature');
+      return;
+    }
+
+    try {
+      const tsFile = await getFile(latestRunData.tsFile);
+      if (!tsFile) {
+        toast.error('TS execution file not found');
+        return;
+      }
+      await runContractMethod(tsFile.content, methodName);
+    } catch (e) {
+      console.error('Method execution failed', e);
+      toast.error('Method execution failed');
+    }
+  };
 
   const attachDebugSession = async () => {
     if (!selectedFile) {
@@ -424,6 +475,29 @@ export default function DebugPanel({files, setCurrentFile}: DebugPanelProps) {
             </TooltipProvider>
           </div>
         </div>
+
+        {/* Executable Methods - Flat */}
+        {latestRunData && latestRunData.methodIdentifiers && (
+          <div className="space-y-6">
+            <div className="flex items-center px-1 border-b pb-2 mb-2">
+              <span className="text-sm font-semibold">Executable Methods</span>
+            </div>
+            <div className="flex flex-wrap gap-2 px-1">
+              {Object.keys(latestRunData.methodIdentifiers).map(sig => (
+                <Button
+                  key={sig}
+                  variant="outline"
+                  size="sm"
+                  className="h-8 text-xs font-medium"
+                  onClick={() => handleMethodCall(sig)}
+                >
+                  <PlayIcon className="mr-2 h-3 w-3" />
+                  {sig.match(/\s*(\w+)\s*\(/)?.[1] || sig}
+                </Button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -16,7 +16,7 @@ const Editor = dynamic(() => import('@/components/editor'), {
   ),
 });
 
-import type {CompiledResult, FileType} from '@/lib/types';
+import type {FileType} from '@/lib/types';
 import {Loader2, X, ChevronUp} from 'lucide-react';
 import Sidebar, {type SidebarTab} from '@/components/sidebar';
 import DeployPanel from '@/components/deploy-panel';
@@ -41,9 +41,7 @@ export default function SmallcIDE() {
   const isResizingRef = useRef(false);
 
   // compile result cache, key is file name
-  const [compiledResultMap, setCompiledResultMap] = useState<
-    Map<string, CompiledResult>
-  >(new Map());
+  // compile result cache handled by useCompilerStore now
 
   useEffect(() => {
     const initialize = async () => {
@@ -181,8 +179,6 @@ export default function SmallcIDE() {
         return (
           <CompilePanel
             files={files}
-            compiledResultMap={compiledResultMap}
-            setCompiledResultMap={setCompiledResultMap}
             refreshFiles={async () => {
               const {getAllFiles} = await import('@/lib/db');
               const loadedFiles = await getAllFiles();
@@ -191,9 +187,7 @@ export default function SmallcIDE() {
           />
         );
       case 'deploy':
-        return (
-          <DeployPanel files={files} compiledResultMap={compiledResultMap} />
-        );
+        return <DeployPanel files={files} />;
       case 'debug':
         return <DebugPanel files={files} setCurrentFile={handleOpenFile} />;
       case 'settings':
@@ -254,8 +248,6 @@ export default function SmallcIDE() {
                 <Editor
                   key={currentFile?.id || 'home'}
                   file={currentFile || HOME_TAB}
-                  compiledResultMap={compiledResultMap}
-                  setCompiledResultMap={setCompiledResultMap}
                   updateFile={(content: string) => {
                     if (currentFile?.id === 'home') return;
                     const updatedFiles = files.map(f =>

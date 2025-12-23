@@ -27,6 +27,7 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "incremental": true,
+    "outDir": "dist",
     "paths": {
       "@/*": ["./src/*"]
     },
