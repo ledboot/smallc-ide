@@ -1,15 +1,8 @@
 'use client';
 
 import {useState, useEffect} from 'react';
-import {FileIcon} from 'lucide-react';
+import {FileIcon, Bug} from 'lucide-react';
 import {Button} from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
 import {Label} from '@/components/ui/label';
 import {Input} from '@/components/ui/input';
 import {
@@ -36,6 +29,8 @@ import {
   VscDebugStepInto,
   VscDebugStepOut,
   VscDebugRestart,
+  VscDebugStop,
+  VscDebugContinue,
 } from 'react-icons/vsc';
 
 import {DebugCallType} from '@/constants';
@@ -85,81 +80,64 @@ export default function DebugPanel({files, setCurrentFile}: DebugPanelProps) {
 
   const [transactionHash, setTransactionHash] = useState<string>('');
 
-  // Auto-select first .c file if none selected and files are available
-  useEffect(() => {
-    if (cFiles.length > 0 && !selectedFileId) {
-      setSelectedFileId(cFiles[0]!.id);
-      setCurrentFile(cFiles[0]!);
-    }
-  }, [cFiles, selectedFileId, setCurrentFile]);
-
-  // Initialize debug session
-  const initializeDebugSession = async () => {
+  const attachDebugSession = async () => {
     if (!selectedFile) {
       toast.error('Please select a file to debug');
-      return false;
+      return;
     }
+    setCurrentFile(selectedFile);
 
     try {
-      // Set breakpoints for the selected file
-      if (selectedFile.breakpoints?.length) {
-        const breakpoints = selectedFile.breakpoints.map(
-          (bp: {lineNumber: number; condition?: string}) => ({
-            line: bp.lineNumber,
-            file: selectedFile?.name || '',
-            condition: bp.condition,
-          }),
-        );
+      const res = await rpcClient
+        .getClient(chainType)
+        .debugCall(DebugCallType.attach);
 
-        // Use the breakpoints in the debug call
-        const [response, err] = await rpcClient
-          .getClient(chainType)
-          .debugCall(DebugCallType.breakpoints);
-
-        if (err) throw new Error(err);
-
+      if (res && res.result) {
+        toast.success('Debug session attached');
+        setIsDebugging(true);
+        setIsPaused(true);
         setDebugSession({
-          sessionId: response.sessionId,
-          breakpoints: response.breakpoints,
+          sessionId: 'default',
+          breakpoints: [],
         });
+        // 打开对应的文件
+        setCurrentFile(selectedFile);
+      } else {
+        toast.error('Failed to attach debug session');
       }
-
-      return true;
     } catch (error) {
-      console.error('Failed to initialize debug session:', error);
-      toast.error('Failed to start debug session');
-      return false;
+      console.error('Attach failed:', error);
+      toast.error('Failed to attach debug session');
     }
   };
 
-  const handleStartDebugging = async () => {
+  const restartDebugSession = async () => {
     if (!selectedFile) {
-      toast.warning('Please select a file to debug');
+      toast.error('Please select a file to debug');
       return;
     }
 
-    const initialized = await initializeDebugSession();
-    if (!initialized) return;
-
-    setIsDebugging(true);
-    setIsPaused(true);
-
     try {
-      // Start the debugger
-      const [debugInfo, err] = await rpcClient
+      const res = await rpcClient
         .getClient(chainType)
         .debugCall(DebugCallType.start);
-      if (err) throw new Error(err);
 
-      // Update UI with initial debug state
-      if (debugInfo) {
-        setVariables(debugInfo.variables || []);
+      if (res && res.result) {
+        toast.success('Debug session restarted');
+        setIsDebugging(true);
+        setIsPaused(true);
+        setDebugSession({
+          sessionId: 'default',
+          breakpoints: [],
+        });
+        // 打开对应的文件
+        setCurrentFile(selectedFile);
+      } else {
+        toast.error('Failed to restart debug session');
       }
     } catch (error) {
-      console.error('Debug start failed:', error);
-      toast.error('Failed to start debugging');
-      setIsDebugging(false);
-      setIsPaused(false);
+      console.error('Restart failed:', error);
+      toast.error('Failed to restart debug session');
     }
   };
 
@@ -185,7 +163,6 @@ export default function DebugPanel({files, setCurrentFile}: DebugPanelProps) {
     if (!debugSession) return;
 
     try {
-      setIsPaused(false);
       setIsPaused(false);
       const [result, err] = await rpcClient
         .getClient(chainType)
@@ -273,151 +250,181 @@ export default function DebugPanel({files, setCurrentFile}: DebugPanelProps) {
   };
 
   return (
-    <div className="flex h-full flex-col p-4 space-y-4">
-      <div className="flex flex-col space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Debugger</h2>
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="debug-file">Select File</Label>
-          <Select
-            value={selectedFileId || ''}
-            onValueChange={value => {
-              setSelectedFileId(value);
-              const file = files.find(f => f.id === value);
-              if (file) setCurrentFile(file);
-            }}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select a file to debug" />
-            </SelectTrigger>
-            <SelectContent>
-              {cFiles.map(file => (
-                <SelectItem key={file.id} value={file.id}>
-                  <div className="flex items-center">
-                    <FileIcon className="mr-2 h-4 w-4" />
-                    {file.name}
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="debug-addr">Transaction Hash</Label>
-          <Input
-            id="debug-addr"
-            placeholder="Enter transaction hash"
-            value={transactionHash}
-            onChange={e => setTransactionHash(e.target.value)}
-          />
+    <div className="flex h-full flex-col p-4 space-y-10">
+      {/* Integrated Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 bg-primary/10 rounded-xl">
+            <Bug className="h-5 w-5 text-primary" />
+          </div>
+          <h2 className="text-xl font-bold tracking-tight">Debugger</h2>
         </div>
       </div>
 
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm">Debug Controls</CardTitle>
-          <CardDescription>
-            {selectedFile
-              ? `Ready to debug: ${selectedFile.name}`
-              : cFiles.length > 0
-                ? 'Select a C file to debug'
-                : 'No C files available'}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center gap-1 bg-muted/50 p-1 rounded-md w-fit">
+      <div className="flex-1 space-y-10 overflow-y-auto pr-1">
+        {/* Session Discovery - Flat */}
+        <div className="space-y-6">
+          <div className="space-y-2">
+            <Label htmlFor="debug-file" className="text-xs font-semibold">
+              TARGET SOURCE
+            </Label>
+            <Select
+              value={selectedFileId || ''}
+              onValueChange={setSelectedFileId}
+              disabled={isDebugging}
+            >
+              <SelectTrigger
+                id="debug-file"
+                className="h-12 w-full max-w-[200px] px-2 hover:bg-muted/40 focus:ring-0 focus:ring-offset-0"
+              >
+                <SelectValue placeholder="Select target..." />
+              </SelectTrigger>
+              <SelectContent className="border-none shadow-xl bg-background/95 backdrop-blur-md">
+                {cFiles.map(file => (
+                  <SelectItem key={file.id} value={file.id}>
+                    <div className="flex items-center gap-3 py-1">
+                      <FileIcon className="h-4 w-4 opacity-50" />
+                      <span className="font-medium">{file.name}</span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        {/* Execution Pipeline - Flat */}
+        <div className="space-y-6">
+          <div className="flex items-center px-1 border-b pb-2 mb-2">
+            <span className="text-sm font-semibold">Execution Control</span>
+          </div>
+
+          <div className="flex items-center justify-start">
             <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={handleStartDebugging}
-                    className="h-8 w-8 p-0"
-                  >
-                    <VscDebugStart className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Start</TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={handlePause}
-                    className="h-8 w-8 p-0"
-                  >
-                    <VscDebugPause className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Pause (F6)</TooltipContent>
-              </Tooltip>
+              <div className="flex items-center">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={attachDebugSession}
+                      disabled={isDebugging}
+                      className="h-8 w-8 p-0 rounded-xl transition-all hover:scale-105 shadow-md shadow-primary/5"
+                    >
+                      <VscDebugStart className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Start</TooltipContent>
+                </Tooltip>
 
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={handleStepOver}
-                    disabled={!isPaused}
-                    className="h-8 w-8 p-0"
-                  >
-                    <VscDebugStepOver className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Step Over (F10)</TooltipContent>
-              </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={restartDebugSession}
+                      disabled={!isDebugging}
+                      className="h-8 w-8 p-0 rounded-xl text-amber-500 hover:text-amber-600 hover:bg-amber-500/10"
+                    >
+                      <VscDebugRestart className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Restart</TooltipContent>
+                </Tooltip>
 
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={handleStepInto}
-                    disabled={!isPaused}
-                    className="h-8 w-8 p-0"
-                  >
-                    <VscDebugStepInto className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Step Into (F11)</TooltipContent>
-              </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={handleStopDebugging}
+                      disabled={!isDebugging}
+                      className="h-8 w-8 p-0 rounded-xl text-destructive hover:text-destructive/80 hover:bg-destructive/10"
+                    >
+                      <VscDebugStop className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Terminate</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={handleContinue}
+                      disabled={!isDebugging || !isPaused}
+                      className="h-8 w-8 p-0 rounded-xl text-emerald-600 hover:bg-emerald-500/10 disabled:opacity-20"
+                    >
+                      <VscDebugContinue className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Resume</TooltipContent>
+                </Tooltip>
 
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={handleStepOut}
-                    disabled={!isPaused}
-                    className="h-8 w-8 p-0"
-                  >
-                    <VscDebugStepOut className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Step Out (Shift+F11)</TooltipContent>
-              </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={handlePause}
+                      disabled={!isDebugging || isPaused}
+                      className="h-8 w-8 p-0 rounded-xl text-blue-600 hover:bg-blue-500/10 disabled:opacity-20"
+                    >
+                      <VscDebugPause className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Pause</TooltipContent>
+                </Tooltip>
 
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={handleStartDebugging}
-                    className="h-8 w-8 p-0"
-                  >
-                    <VscDebugRestart className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Restart (Ctrl+Shift+F5)</TooltipContent>
-              </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={handleStepOver}
+                      disabled={!isPaused}
+                      className="h-8 w-8 p-0 rounded-xl text-foreground/70 hover:bg-foreground/5 disabled:opacity-20"
+                    >
+                      <VscDebugStepOver className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Step Over</TooltipContent>
+                </Tooltip>
+
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={handleStepInto}
+                      disabled={!isPaused}
+                      className="h-8 w-8 p-0 rounded-xl text-foreground/70 hover:bg-foreground/5 disabled:opacity-20"
+                    >
+                      <VscDebugStepInto className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Step Into</TooltipContent>
+                </Tooltip>
+
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={handleStepOut}
+                      disabled={!isPaused}
+                      className="h-8 w-8 p-0 rounded-xl text-foreground/70 hover:bg-foreground/5 disabled:opacity-20"
+                    >
+                      <VscDebugStepOut className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Step Out</TooltipContent>
+                </Tooltip>
+              </div>
             </TooltipProvider>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }

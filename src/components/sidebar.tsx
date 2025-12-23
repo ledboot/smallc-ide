@@ -37,42 +37,49 @@ const sidebarItems = [
     icon: FolderIcon,
     label: 'File Explorer',
     shortcut: 'Ctrl+Shift+E',
+    enable: true,
   },
   {
     id: 'search' as SidebarTab,
     icon: SearchIcon,
     label: 'Search',
     shortcut: 'Ctrl+Shift+F',
+    enable: false,
   },
   {
     id: 'git' as SidebarTab,
     icon: GitBranchIcon,
     label: 'Source Control',
     shortcut: 'Ctrl+Shift+G',
+    enable: false,
   },
   {
     id: 'compile' as SidebarTab,
     icon: PlayIcon,
     label: 'Compiler',
     shortcut: 'Ctrl+Shift+C',
+    enable: true,
   },
   {
     id: 'deploy' as SidebarTab,
     icon: RocketIcon,
     label: 'Deploy & Run',
     shortcut: 'Ctrl+Shift+D',
+    enable: true,
   },
   {
     id: 'debug' as SidebarTab,
     icon: BugIcon,
     label: 'Debug',
     shortcut: 'Ctrl+Shift+Y',
+    enable: true,
   },
   {
     id: 'settings' as SidebarTab,
     icon: SettingsIcon,
     label: 'Settings',
     shortcut: 'Ctrl+,',
+    enable: false,
   },
 ];
 
@@ -84,6 +91,10 @@ export default function Sidebar({activeTab, onTabChange}: SidebarProps) {
           {sidebarItems.map(item => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
+
+            if (!item.enable) {
+              return null;
+            }
 
             return (
               <Tooltip key={item.id}>

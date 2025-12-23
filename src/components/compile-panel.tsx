@@ -2,7 +2,6 @@
 
 import {useState, useEffect} from 'react';
 import {Button} from '@/components/ui/button';
-import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card';
 import {
   Select,
   SelectContent,
@@ -12,7 +11,6 @@ import {
 } from '@/components/ui/select';
 import {Label} from '@/components/ui/label';
 import {Badge} from '@/components/ui/badge';
-import {Alert, AlertDescription} from '@/components/ui/alert';
 import {
   PlayIcon,
   AlertCircleIcon,
@@ -34,6 +32,7 @@ import {runContractMethod} from '@/utils/contractRunner';
 import {useConsoleStore} from '@/lib/console-store';
 import {rpcClient} from '@/lib/api';
 import {useRootStore} from '@/state';
+import {Input} from './ui/input';
 
 interface CompilePanelProps {
   files: FileType[];
@@ -59,6 +58,7 @@ export default function CompilePanel({
 
   const {addLog} = useConsoleStore();
   const {chainType} = useRootStore().settings;
+  const [executeMethod, setExecuteMethod] = useState('');
 
   // Filter out .c and .ts files
   const sourceFiles = files.filter(
@@ -105,13 +105,13 @@ export default function CompilePanel({
     // Handle TypeScript files separately
     if (file.name.endsWith('.ts')) {
       try {
-        const rawTx = await runContractMethod(file.content, 'store');
+        const rawTx = await runContractMethod(file.content, executeMethod);
         if (!rawTx) {
           return;
         }
         console.log('rawTx', rawTx);
         const privateKey =
-          '';
+          'cUPvqzYW2anTXKp2eARPTAxQfP5x2dMNg9bndqCPRiPtrrbo8BT4';
         // signrawtransaction
         const signedTx = await rpcClient
           .getClient(chainType)
@@ -188,7 +188,7 @@ export default function CompilePanel({
         if (refreshFiles) {
           await refreshFiles();
         }
-        generateTemplate(file);
+        // generateTemplate(file.name);
       } else {
         // setCompilationOutput(
         //   result.output || `Compilation failed for ${file.name}`
@@ -207,9 +207,9 @@ export default function CompilePanel({
     }
   };
 
-  const generateTemplate = async (sourceFile: FileType) => {
+  const generateTemplate = async (sourceFileName: string) => {
     try {
-      const baseName = sourceFile.name.split('.').slice(0, -1).join('.');
+      const baseName = sourceFileName.split('.').slice(0, -1).join('.');
       const abiFileName = `/${baseName}.abi`;
       const abiFile = await getFile(abiFileName);
       console.log('abiFile', abiFile);
@@ -330,41 +330,51 @@ export default function CompilePanel({
   };
 
   return (
-    <div className="flex h-full flex-col p-3 space-y-3">
+    <div className="flex h-full flex-col p-2 pt-4 space-y-10">
+      {/* Header section - Flat and integrated */}
       <div className="flex items-center justify-between">
-        <h3 className="text-base font-semibold">SmallC Compiler</h3>
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 bg-primary/10 rounded-xl">
+            <PlayIcon className="h-5 w-5 text-primary" />
+          </div>
+          <h3 className="text-xl font-bold tracking-tight">Compiler</h3>
+        </div>
         <Badge
           variant={isWasmReady() ? 'default' : 'secondary'}
-          className="text-xs"
+          className="rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-wider"
         >
-          {isWasmReady() ? 'WASM' : 'SIM'}
+          {isWasmReady() ? 'Wasm Engine' : 'Sim Engine'}
         </Badge>
       </div>
 
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm flex items-center gap-2">
-            <FileIcon className="h-4 w-4" />
-            Source File
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
+      <div className="flex-1 space-y-8 overflow-y-auto pr-1">
+        {/* Source File Selection Section - No Card */}
+        <div className="space-y-6">
           {sourceFiles.length > 0 ? (
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="fileSelect" className="text-xs">
-                  Select Source File
+            <div className="space-y-6">
+              <div className="flex items-center space-y-2">
+                <Label
+                  htmlFor="fileSelect"
+                  className="w-18 h-12 min-w-18 text-xs font-semibold m-0"
+                >
+                  Source File
                 </Label>
                 <Select value={selectedFile} onValueChange={setSelectedFile}>
-                  <SelectTrigger className="h-8">
-                    <SelectValue placeholder="Choose..." />
+                  <SelectTrigger
+                    id="fileSelect"
+                    className="h-12 w-full px-2 hover:bg-muted/40 focus:ring-0 focus:ring-offset-0"
+                  >
+                    <SelectValue placeholder="Select a contract..." />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent
+                    position="popper"
+                    className="w-[var(--radix-select-trigger-width)] border-none shadow-xl bg-background/95 backdrop-blur-md"
+                  >
                     {sourceFiles.map(file => (
                       <SelectItem key={file.id} value={file.id}>
-                        <div className="flex items-center gap-2">
-                          <FileIcon className="h-3 w-3" />
-                          <span className="truncate">{file.name}</span>
+                        <div className="flex items-center gap-3 py-1">
+                          <FileIcon className="h-4 w-4 opacity-50" />
+                          <span className="font-medium">{file.name}</span>
                         </div>
                       </SelectItem>
                     ))}
@@ -372,79 +382,118 @@ export default function CompilePanel({
                 </Select>
               </div>
 
-              <div className="flex items-center space-x-2 pt-2">
-                <Switch
-                  id="debug-mode"
-                  checked={debugMode}
-                  onCheckedChange={setDebugMode}
-                />
-                <Label
-                  htmlFor="debug-mode"
-                  className="flex items-center gap-2 text-xs cursor-pointer"
-                >
-                  <Bug className="h-3.5 w-3.5" />
-                  Debug Mode
-                </Label>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between rounded-xl hover:bg-muted/30">
+                  <div className="flex items-center gap-4">
+                    <div className="rounded-full bg-primary/10 p-2.5">
+                      <Bug className="h-4 w-4 text-primary" />
+                    </div>
+                    <div>
+                      <Label
+                        htmlFor="debug-mode"
+                        className="text-sm font-bold cursor-pointer"
+                      >
+                        Debug Flag
+                      </Label>
+                      <p className="text-[12px] text-muted-foreground font-medium">
+                        Generate dbs file.
+                      </p>
+                    </div>
+                  </div>
+                  <Switch
+                    id="debug-mode"
+                    checked={debugMode}
+                    onCheckedChange={setDebugMode}
+                    className="scale-90"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="method-input" className="text-xs font-medium">
+                    Entry Point Method
+                  </Label>
+                  <Input
+                    id="method-input"
+                    type="text"
+                    value={executeMethod}
+                    onChange={e => setExecuteMethod(e.target.value)}
+                    placeholder="e.g. main"
+                    className="h-12 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                  />
+                </div>
               </div>
             </div>
           ) : (
-            <Alert>
-              <InfoIcon className="h-4 w-4" />
-              <AlertDescription className="text-xs">
-                No source files found. Create a .c or .ts file to get started.
-              </AlertDescription>
-            </Alert>
+            <div className="flex flex-col items-center justify-center py-12 bg-muted/10 rounded-3xl">
+              <div className="rounded-full bg-muted/20 p-4 mb-4">
+                <InfoIcon className="h-8 w-8 text-muted-foreground/30" />
+              </div>
+              <p className="text-sm font-bold text-muted-foreground/80">
+                Workspace Empty
+              </p>
+              <p className="text-xs text-muted-foreground/60 mt-1 text-center">
+                Create a .c or .ts file in the explorer to begin.
+              </p>
+            </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
 
-      <Button
-        onClick={handleCompile}
-        disabled={isCompiling || !selectedFile || sourceFiles.length === 0}
-        className="w-full"
-      >
-        {isCompiling ? (
-          <>
-            <PlayIcon className="mr-2 h-4 w-4 animate-spin" />
-            Compiling...
-          </>
-        ) : (
-          <>
-            <PlayIcon className="mr-2 h-4 w-4" />
-            {selectedFile.endsWith('.ts') ? 'Run TS' : 'Compile'}
-          </>
-        )}
-      </Button>
+        <div className="flex justify-center items-center pt-4 space-y-4">
+          <Button
+            onClick={handleCompile}
+            disabled={isCompiling || !selectedFile || sourceFiles.length === 0}
+            className="w-[220px] h-14 text-sm font-black uppercase tracking-widest bg-primary text-primary-foreground transition-all hover:scale-[1.01] active:scale-[0.98] shadow-lg shadow-primary/20"
+          >
+            {isCompiling ? (
+              <>
+                <PlayIcon className="mr-3 h-5 w-5 animate-spin" />
+                Processing...
+              </>
+            ) : (
+              <>
+                <PlayIcon className="mr-3 h-5 w-5 fill-current" />
+                {selectedFile?.endsWith('.ts')
+                  ? 'Execute Script'
+                  : 'Build Contract'}
+              </>
+            )}
+          </Button>
 
-      {compilationSuccess !== null && (
-        <Alert
-          className={`${
-            compilationSuccess
-              ? 'border-green-200 bg-green-50'
-              : 'border-red-200 bg-red-50'
-          }`}
-        >
-          {compilationSuccess ? (
-            <>
-              <CheckCircleIcon className="h-4 w-4 text-green-600" />
-              <AlertDescription className="text-green-800 text-xs">
-                {selectedFile.endsWith('.ts')
-                  ? 'Execution successful!'
-                  : 'Compilation successful!'}
-              </AlertDescription>
-            </>
-          ) : (
-            <>
-              <AlertCircleIcon className="h-4 w-4 text-red-600" />
-              <AlertDescription className="text-red-800 text-xs">
-                {selectedFile.endsWith('.ts')
-                  ? 'Execution failed.'
-                  : 'Compilation failed.'}
-              </AlertDescription>
-            </>
+          {compilationSuccess !== null && (
+            <div
+              className={`flex items-start gap-4 p-5 rounded-2xl animate-in fade-in slide-in-from-bottom-4 duration-500 ${
+                compilationSuccess
+                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                  : 'bg-destructive/10 text-destructive'
+              }`}
+            >
+              {compilationSuccess ? (
+                <div className="p-2 bg-emerald-500/20 rounded-full shrink-0">
+                  <CheckCircleIcon className="h-5 w-5" />
+                </div>
+              ) : (
+                <div className="p-2 bg-destructive/20 rounded-full shrink-0">
+                  <AlertCircleIcon className="h-5 w-5" />
+                </div>
+              )}
+              <div className="space-y-1">
+                <p className="text-sm font-black uppercase tracking-wider">
+                  {compilationSuccess ? 'Build Complete' : 'Build Error'}
+                </p>
+                <p className="text-xs font-medium leading-relaxed opacity-80">
+                  {selectedFile?.endsWith('.ts')
+                    ? compilationSuccess
+                      ? 'The script executed successfully and the transaction was broadcast to the network.'
+                      : 'Something went wrong during script execution. Please check the logs below.'
+                    : compilationSuccess
+                      ? 'Your contract has been built successfully and all debug symbols are ready.'
+                      : 'There was an error in your source code. Check the console for precise line numbers.'}
+                </p>
+              </div>
+            </div>
           )}
-        </Alert>
-      )}
+        </div>
+      </div>
     </div>
   );
 }

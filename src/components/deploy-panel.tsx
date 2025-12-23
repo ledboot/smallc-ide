@@ -2,13 +2,6 @@
 
 import {useState, useEffect} from 'react';
 import {Button} from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
 import {Input} from '@/components/ui/input';
 import {Label} from '@/components/ui/label';
 import {
@@ -19,16 +12,12 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import {Badge} from '@/components/ui/badge';
-import {Alert, AlertDescription} from '@/components/ui/alert';
 import {
   RocketIcon,
   FuelIcon as GasIcon,
   NetworkIcon,
   InfoIcon,
-  ExternalLinkIcon,
   FileIcon,
-  ChevronDown,
-  ChevronUp,
 } from 'lucide-react';
 import type {FileType} from '@/lib/types';
 import {ChainType, CHAIN_INFO} from '@/constants';
@@ -40,11 +29,9 @@ import {MsgT} from '@/utils/msgTools';
 import {rpcClient} from '@/lib/api';
 import {bytesToHex2} from '@/utils/index';
 import {TinDef, ToutDef} from '@/utils/defs';
-import {
-  type DeployedContractCardProps,
-  DeployedContractCard,
-} from './deployeContractCard';
 import {Address} from '@/utils/address';
+import {getFile, saveFile, createFolder} from '@/lib/db';
+import {generateContractTemplate} from '@/utils/templateGenerator';
 
 interface DeployPanelProps {
   files: FileType[];
@@ -60,54 +47,15 @@ export default function DeployPanel({
   const [deploymentResult, setDeploymentResult] = useState<string | null>(null);
   const [privateKey, setPrivateKey] = useState('');
   const [utxo, setUtxo] = useState('');
-  const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<FileType | null>(null);
+  const [utxoValueStr, setUtxoValueStr] = useState<string>('');
 
   const cFiles = files.filter(file => file.name.endsWith('.c'));
-  const selectedFile = files.find(file => file.id === selectedFileId) || null;
-
-  // const [deployedContracts, setDeployedContracts] = useState<
-  //   Map<string, DeployedContractCardProps[]>
-  // >(new Map());
-
-  const [deployedContractsMap, setDeployedContractsMap] = useState<
-    Map<string, DeployedContractCardProps[]>
-  >(() => {
-    return new Map([
-      [
-        'storage.c',
-        [
-          {
-            contractAddress: '0x1234567890123456789012345678901234567890',
-            abi: JSON.stringify({
-              'void store(int num)': 'xb792d88c',
-              'void retrieve()': 'x60352ae4',
-            }),
-            contractName: 'storage.c',
-          },
-        ],
-      ],
-    ]);
-  });
-
-  const [currentDeployedContract, setCurrentDeployedContract] = useState<
-    DeployedContractCardProps[] | null
-  >(null);
-
-  // Auto-select first .c file if none selected and files are available
-  useEffect(() => {
-    const deployedContracts = deployedContractsMap.get(selectedFileId || '');
-    console.log('deployedContracts', deployedContracts);
-    if (deployedContracts) {
-      setCurrentDeployedContract(deployedContracts);
-    }
-
-    // setCurrentDeployedContract(deployedContracts.get(cFiles[0].name) ?? null);
-    // setCurrentDeployedContract(mockContracts.get(cFiles[0].name) ?? null);
-  }, [selectedFileId]);
+  ``;
 
   const handleContractSelect = (fileId: string) => {
     console.log('fileId', fileId);
-    setSelectedFileId(fileId);
+    setSelectedFile(cFiles.find(file => file.id === fileId) ?? null);
   };
 
   const [isDeployedContractsExpanded, setIsDeployedContractsExpanded] =
@@ -170,10 +118,12 @@ export default function DeployPanel({
 
     const changeToutDef = new ToutDef();
     changeToutDef.tokenType = 0n;
-    const dummyInputUtxoValue = 99718797n; // Example: 1 token 537200
-    const changeAmount = dummyInputUtxoValue - BigInt(fee);
+    const changeAmount = BigInt(utxoValueStr) - BigInt(fee);
+    console.log('changeAmount', changeAmount);
+    console.log('utxoValueStr', utxoValueStr);
+    console.log('fee', fee);
 
-    if (changeAmount < 0n) {
+    if (changeAmount < 0) {
       toast.error('Insufficient funds for deployment and fee.');
       setIsDeploying(false);
       return;
@@ -212,35 +162,31 @@ export default function DeployPanel({
     console.log('txHash', txHash);
     setIsDeploying(false);
 
-    // After successful deployment
-    const newContract = {
-      contractAddress: result.hash, // or the actual contract address
-      abi: result.abi,
-      contractName: selectedFile.name,
-    };
-    setDeployedContractsMap(prev => {
-      const newMap = new Map(prev);
-      const contracts = newMap.get(selectedFile.name) || [];
-      newMap.set(selectedFile.name, [...contracts, newContract]);
-      return newMap;
-    });
-
     toast.success('Transaction sent successfully');
 
-    // Auto-generate template JS after successful deployment
+    await generateTemplate(selectedFile.name);
+  };
+
+  const handleSetChainType = (chainType: ChainType) => {
+    settingsStore.setState({chainType});
+  };
+
+  const generateTemplate = async (sourceFileName: string) => {
     try {
-      const {generateContractTemplate} =
-        await import('@/utils/templateGenerator');
-      const {saveFile, createFolder} = await import('@/lib/db');
+      const baseName = sourceFileName.split('.').slice(0, -1).join('.');
+      const abiFileName = `/${baseName}.abi`;
+      const abiFile = await getFile(abiFileName);
+      console.log('abiFile', abiFile);
+      if (!abiFile) {
+        toast.error('ABI file not found');
+        return;
+      }
+      // Parse ABI to create the template
 
-      const abiObj = JSON.parse(result.abi);
-      const abiWithAddress = {
-        address: result.hash,
-        ...abiObj,
-      };
-
-      const templateCode = generateContractTemplate(abiWithAddress);
-      const filename = `${selectedFile.name.replace('.c', '')}_runner.js`;
+      // Generate template JS
+      const templateCode = generateContractTemplate(
+        JSON.parse(abiFile.content),
+      );
 
       // Ensure .build directory exists
       const buildDir = '/.build';
@@ -250,192 +196,219 @@ export default function DeployPanel({
         // Directory might already exist, ignore
       }
 
-      // Save file
-      const filePath = `${buildDir}/${filename}`;
-      await saveFile({
-        id: filePath,
-        name: filename,
+      // Save to .build directory
+      const timestamp = Math.floor(Date.now() / 1000).toString();
+      const timestampFilename = `${baseName}_${timestamp}.ts`;
+      const latestFilename = `${baseName}_latest.ts`;
+
+      const timestampFile: FileType = {
+        id: `${buildDir}/${timestampFilename}`,
+        name: timestampFilename,
         content: templateCode,
-        path: filePath,
+        path: `${buildDir}/${timestampFilename}`,
         isDirectory: false,
         lastModified: new Date().toISOString(),
-      });
+      };
+
+      const latestFile: FileType = {
+        id: `${buildDir}/${latestFilename}`,
+        name: latestFilename,
+        content: templateCode,
+        path: `${buildDir}/${latestFilename}`,
+        isDirectory: false,
+        lastModified: new Date().toISOString(),
+      };
+
+      await saveFile(timestampFile);
+      await saveFile(latestFile);
 
       toast.success('Template generated', {
-        description: `Saved to .build/${filename}`,
+        description: `Saved to .build/${latestFilename}`,
       });
     } catch (error) {
-      console.error('Failed to auto-generate template:', error);
-      // Don't show error toast since deployment was successful
+      console.error('Failed to generate template:', error);
+      toast.error('Failed to generate template', {
+        description: error instanceof Error ? error.message : 'Unknown error',
+      });
     }
   };
-
-  const handleSetChainType = (chainType: ChainType) => {
-    settingsStore.setState({chainType});
-  };
-
   return (
-    <div className="flex h-full flex-col p-4 space-y-4">
-      <div className="flex items-center gap-2">
-        <RocketIcon className="h-5 w-5" />
-        <h2 className="text-lg font-semibold">Deploy & Run Transactions</h2>
+    <div className="flex h-full flex-col p-2 pt-4 space-y-10">
+      {/* Integrated Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 bg-primary/10 rounded-xl">
+            <RocketIcon className="h-5 w-5 text-primary" />
+          </div>
+          <h2 className="text-xl font-bold tracking-tight">Deploy Contract</h2>
+        </div>
       </div>
 
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm">Environment</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="network">Network</Label>
-            <Select value={chainType} onValueChange={handleSetChainType}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(CHAIN_INFO).map(([chainType, chainInfo]) => (
-                  <SelectItem key={chainType} value={chainType}>
-                    <div className="flex items-center gap-2">
-                      <NetworkIcon className="h-4 w-4" />
-                      {chainInfo.label}
-                      <Badge variant="outline" className="text-xs">
-                        {chainInfo.chainId}
-                      </Badge>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="flex-col items-center space-y-2 text-sm">
-            <Input
-              type="text"
-              value={privateKey}
-              onChange={e => setPrivateKey(e.target.value)}
-              placeholder="Enter your wallet private key"
-            />
-            <Input
-              type="text"
-              value={utxo}
-              onChange={e => setUtxo(e.target.value)}
-              placeholder="Enter UTXO"
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm">Deploy Contract</CardTitle>
-          <CardDescription>
-            {selectedFile
-              ? `Ready to deploy: ${selectedFile.name}`
-              : 'Select a C file to deploy'}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {cFiles.length > 0 ? (
+      <div className="flex-1 space-y-10 overflow-y-auto pr-1">
+        {/* Environment Section - Flat */}
+        <div className="space-y-6">
+          <div className="space-y-6 px-1">
             <div className="space-y-2">
-              <Label>Available Contracts</Label>
-              <Select
-                value={selectedFileId || cFiles[0]!.id}
-                onValueChange={handleContractSelect}
-              >
-                <SelectTrigger className="h-8">
-                  <SelectValue placeholder="Select a file..." />
+              <Label htmlFor="network" className="text-xs font-semibold">
+                TARGET NETWORK
+              </Label>
+              <Select value={chainType} onValueChange={handleSetChainType}>
+                <SelectTrigger
+                  id="network"
+                  className="h-12 transition-all hover:bg-muted/40 focus:ring-0 focus:ring-offset-0 focus:ring-primary/20"
+                >
+                  <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
-                  {cFiles.map(file => (
-                    <SelectItem key={file.id} value={file.id}>
-                      <div className="flex items-center gap-2">
-                        <FileIcon className="h-3 w-3" />
-                        <span className="truncate">{file.name}</span>
+                <SelectContent className="border-none shadow-xl bg-background/95 backdrop-blur-md">
+                  {Object.entries(CHAIN_INFO).map(([type, info]) => (
+                    <SelectItem key={type} value={type}>
+                      <div className="flex items-center gap-3 py-1">
+                        <NetworkIcon className="h-4 w-4 opacity-50" />
+                        <span className="font-medium">{info.label}</span>
+                        <Badge
+                          variant="outline"
+                          className="ml-auto text-[9px] font-black tracking-tighter h-4 border-muted-foreground/20"
+                        >
+                          {info.chainId}
+                        </Badge>
                       </div>
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-          ) : (
-            <Alert>
-              <InfoIcon className="h-4 w-4" />
-              <AlertDescription>
-                No C contracts found. Create a .c file to get started.
-              </AlertDescription>
-            </Alert>
-          )}
 
-          <Button
-            onClick={handleDeploy}
-            disabled={isDeploying || !selectedFile}
-            className="w-full"
-          >
-            {isDeploying ? (
-              <>
-                <GasIcon className="mr-2 h-4 w-4 animate-spin" />
-                Deploying...
-              </>
-            ) : (
-              <>
-                <RocketIcon className="mr-2 h-4 w-4" />
-                Deploy
-              </>
-            )}
-          </Button>
-        </CardContent>
-      </Card>
-
-      <Card className="mt-6">
-        <CardHeader
-          className="pb-2 cursor-pointer hover:bg-muted/50 rounded-t-lg transition-colors"
-          onClick={() =>
-            setIsDeployedContractsExpanded(!isDeployedContractsExpanded)
-          }
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <CardTitle>Deployed Contracts</CardTitle>
-            </div>
-            {isDeployedContractsExpanded ? (
-              <ChevronUp className="h-4 w-4 text-muted-foreground" />
-            ) : (
-              <ChevronDown className="h-4 w-4 text-muted-foreground" />
-            )}
-          </div>
-        </CardHeader>
-        {isDeployedContractsExpanded && (
-          <CardContent className="px-2">
-            {currentDeployedContract &&
-              Array.from(currentDeployedContract).map((contract, index) => (
-                <DeployedContractCard
-                  contractAddress={contract.contractAddress}
-                  abi={contract.abi}
-                  contractName={contract.contractName}
-                  key={`${contract.contractAddress}-${index}`}
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <Label htmlFor="private-key" className="text-xs font-semibold">
+                  WALLET CREDENTIALS
+                </Label>
+                <Input
+                  id="private-key"
+                  type="password"
+                  value={privateKey}
+                  onChange={e => setPrivateKey(e.target.value)}
+                  placeholder="Enter private key (WIF)"
+                  className="h-12 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:opacity-50"
                 />
-              ))}
-          </CardContent>
-        )}
-      </Card>
-      {deploymentResult && (
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm">Deployment Result</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <pre className="whitespace-pre-wrap text-xs font-mono bg-muted p-2 rounded">
-              {deploymentResult}
-            </pre>
-            {deploymentResult.includes('successful') && (
-              <Button variant="outline" size="sm" className="mt-2">
-                <ExternalLinkIcon className="mr-2 h-4 w-4" />
-                View on Explorer
-              </Button>
-            )}
-          </CardContent>
-        </Card>
-      )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="utxo" className="text-xs font-semibold ">
+                    INPUT UTXO
+                  </Label>
+                  <Input
+                    id="utxo"
+                    type="text"
+                    value={utxo}
+                    onChange={e => setUtxo(e.target.value)}
+                    placeholder="txid:index"
+                    className="h-12 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:opacity-50"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label
+                    htmlFor="utxo-value"
+                    className="text-xs font-semibold "
+                  >
+                    AMOUNT
+                  </Label>
+                  <Input
+                    id="utxo-value"
+                    type="text"
+                    value={utxoValueStr}
+                    onChange={e => setUtxoValueStr(e.target.value)}
+                    placeholder="Value"
+                    className="h-12 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:opacity-50"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Deploy Section - Flat */}
+        <div className="space-y-6">
+          <div className="flex items-center gap-2 px-1 border-t pt-8">
+            <FileIcon className="h-4 w-4 text-primary/70" />
+            <span className="text-sm font-bold uppercase tracking-widest">
+              Contract Deployment
+            </span>
+          </div>
+
+          {cFiles.length > 0 ? (
+            <div className="space-y-6 px-1">
+              <div className="space-y-2">
+                <Label
+                  htmlFor="contract-select"
+                  className="text-xs font-semibold"
+                >
+                  SELECT CONTRACT
+                </Label>
+                <Select
+                  value={selectedFile?.id || ''}
+                  onValueChange={handleContractSelect}
+                >
+                  <SelectTrigger
+                    id="contract-select"
+                    className="h-12 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                  >
+                    <SelectValue placeholder="Ready artifacts..." />
+                  </SelectTrigger>
+                  <SelectContent className="border-none shadow-xl bg-background/95 backdrop-blur-md">
+                    {cFiles.map(file => (
+                      <SelectItem key={file.id} value={file.id}>
+                        <div className="flex items-center gap-3 py-1">
+                          <FileIcon className="h-4 w-4 opacity-50" />
+                          <span className="font-medium">{file.name}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {selectedFile && (
+                  <p className="text-[10px] font-bold text-primary/60 mt-2 px-2 uppercase tracking-widest animate-pulse">
+                    Target: {selectedFile.name}
+                  </p>
+                )}
+              </div>
+
+              <div className="flex justify-center">
+                <Button
+                  onClick={handleDeploy}
+                  disabled={isDeploying || !selectedFile}
+                  className="w-[220px] h-14 text-sm font-black uppercase tracking-widest bg-primary text-primary-foreground transition-all hover:scale-[1.01] active:scale-[0.98] shadow-lg shadow-primary/20"
+                >
+                  {isDeploying ? (
+                    <>
+                      <GasIcon className="mr-3 h-5 w-5 animate-spin" />
+                      Deploying...
+                    </>
+                  ) : (
+                    <>
+                      <RocketIcon className="mr-3 h-5 w-5 fill-current" />
+                      Deploy
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-12 bg-muted/10 rounded-3xl mx-1">
+              <div className="rounded-full bg-muted/20 p-4 mb-4">
+                <InfoIcon className="h-8 w-8 text-muted-foreground/30" />
+              </div>
+              <p className="text-sm font-bold text-muted-foreground/80">
+                No Artifacts
+              </p>
+              <p className="text-xs text-muted-foreground/60 mt-1 max-w-[200px] text-center font-medium">
+                Compile your contract first to generate deployable code.
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

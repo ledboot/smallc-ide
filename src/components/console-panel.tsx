@@ -3,7 +3,7 @@
 import {useEffect, useRef} from 'react';
 import {Button} from '@/components/ui/button';
 import {Input} from '@/components/ui/input';
-import {Copy, Trash2, Search, ChevronDown, ChevronUp} from 'lucide-react';
+import {Trash2, Search, ChevronDown, ChevronUp} from 'lucide-react';
 import {toast} from 'sonner';
 import {useConsoleStore, type LogEntry} from '@/lib/console-store';
 import {cn} from '@/lib/utils';
