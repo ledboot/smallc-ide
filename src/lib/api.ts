@@ -58,31 +58,25 @@ class RPCClient {
 
   // Generic RPC call
   async rpcCall(method: string, params: unknown[] = []) {
-    try {
-      const response = await this.client.post('', {
-        jsonrpc: '1.0',
-        method,
-        params,
-        id: this.sessionId++,
-      });
-      console.log('response', response);
-      console.log(
-        '[rpcCall] method:',
-        method,
-        ' params:',
-        params,
-        ' response:',
-        response,
-      );
-      if (response.data && response.data.error) {
-        console.error('RPC error:', response.data.error);
-        throw new Error(response.data.error.message || 'RPC call failed');
-      }
-      return response.data;
-    } catch (error: any) {
-      console.error(`RPC call failed for method ${method}:`, error);
-      throw new Error(String(error));
+    const response = await this.client.post('', {
+      jsonrpc: '1.0',
+      method,
+      params,
+      id: this.sessionId++,
+    });
+    console.log('response', response);
+    console.log(
+      '[rpcCall] method:',
+      method,
+      ' params:',
+      params,
+      ' response:',
+      response,
+    );
+    if (response.data && response.data.error) {
+      console.error('RPC error:', response.data.error);
     }
+    return response.data;
   }
 
   // fn: detach、attach、clearbreakpoint、breakpoint、
@@ -96,13 +90,12 @@ class RPCClient {
     privkeys: string[],
     ishash: boolean,
   ) {
-    const res = await this.rpcCall('signrawtransaction', [
+    return await this.rpcCall('signrawtransaction', [
       hexString,
       params,
       privkeys,
       ishash,
     ]);
-    return res.result;
   }
 
   // TODO true,15秒内确认

@@ -27,10 +27,11 @@ import CompilePanel from '@/components/compile-panel';
 import {initWasmCompiler} from '@/lib/wasm-compiler';
 import ConsolePanel from '@/components/console-panel';
 import EditorTabs from '@/components/editor-tabs';
+import {useFileStore} from '@/state/file';
 
 export default function SmallcIDE() {
   const [isLoading, setIsLoading] = useState(true);
-  const [files, setFiles] = useState<FileType[]>([]);
+  const {files, setFiles, refreshFiles} = useFileStore();
   const [currentFile, setCurrentFile] = useState<FileType | null>(HOME_TAB);
   const [openTabs, setOpenTabs] = useState<FileType[]>([HOME_TAB]);
   const [activeSidebarTab, setActiveSidebarTab] = useState<SidebarTab>('files');
@@ -46,11 +47,12 @@ export default function SmallcIDE() {
   useEffect(() => {
     const initialize = async () => {
       await initWasmCompiler();
+      await refreshFiles();
       setIsLoading(false);
     };
 
     initialize();
-  }, []);
+  }, [refreshFiles]);
 
   // Sidebar resize logic
   useEffect(() => {
@@ -182,7 +184,10 @@ export default function SmallcIDE() {
             refreshFiles={async () => {
               const {getAllFiles} = await import('@/lib/db');
               const loadedFiles = await getAllFiles();
-              setFiles(loadedFiles);
+              console.log('refreshFiles', loadedFiles);
+              setFiles(
+                Array.from(new Map(loadedFiles.map(f => [f.id, f])).values()),
+              );
             }}
           />
         );

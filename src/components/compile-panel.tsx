@@ -11,14 +11,7 @@ import {
 } from '@/components/ui/select';
 import {Label} from '@/components/ui/label';
 import {Badge} from '@/components/ui/badge';
-import {
-  PlayIcon,
-  AlertCircleIcon,
-  CheckCircleIcon,
-  InfoIcon,
-  FileIcon,
-  Bug,
-} from 'lucide-react';
+import {PlayIcon, InfoIcon, FileIcon, Bug} from 'lucide-react';
 import {Switch} from '@/components/ui/switch';
 import type {CompiledResult, FileType} from '@/lib/types';
 import {compilerService, isWasmReady} from '@/lib/wasm-compiler';
@@ -29,7 +22,7 @@ import {Asm} from '@/lib/asm';
 
 import {generateContractTemplate} from '@/utils/templateGenerator';
 import {runContractMethod} from '@/utils/contractRunner';
-import {useConsoleStore} from '@/lib/console-store';
+import {LogLevel, useConsoleStore} from '@/lib/console-store';
 import {rpcClient} from '@/lib/api';
 import {useRootStore} from '@/state';
 import {useCompilerStore} from '@/state/compiler';
@@ -43,9 +36,6 @@ interface CompilePanelProps {
 export default function CompilePanel({files, refreshFiles}: CompilePanelProps) {
   const [selectedFile, setSelectedFile] = useState<string>('');
   const [isCompiling, setIsCompiling] = useState(false);
-  const [compilationSuccess, setCompilationSuccess] = useState<boolean | null>(
-    null,
-  );
 
   const [compiledData, setCompiledData] = useState<CompiledResult | null>(null);
   const [debugMode, setDebugMode] = useState(false);
@@ -58,9 +48,10 @@ export default function CompilePanel({files, refreshFiles}: CompilePanelProps) {
 
   // Filter out .c and .ts files
   const sourceFiles = files.filter(
-    file => file.name.endsWith('.c') || file.name.endsWith('.ts'),
+    file =>
+      (file.name.endsWith('.c') || file.name.endsWith('.ts')) &&
+      !file.isDirectory,
   );
-
   // Automatically select first file
   useEffect(() => {
     if (sourceFiles.length > 0 && !selectedFile) {
@@ -70,7 +61,6 @@ export default function CompilePanel({files, refreshFiles}: CompilePanelProps) {
 
   useEffect(() => {
     const file = sourceFiles.find(f => f.id === selectedFile);
-    console.log('compiledResultMap', compiledResultMap);
     if (file) {
       const compiledResult = compiledResultMap.get(file.name);
       if (compiledResult) {
@@ -83,20 +73,17 @@ export default function CompilePanel({files, refreshFiles}: CompilePanelProps) {
 
   const handleCompile = async () => {
     if (!selectedFile) {
-      // setCompilationOutput("Please select a file to compile");
-      setCompilationSuccess(false);
+      toast.error('Please select a file to compile');
       return;
     }
 
     const file = sourceFiles.find(f => f.id === selectedFile);
     if (!file) {
-      // setCompilationOutput("Selected file not found");
-      setCompilationSuccess(false);
+      toast.error('Selected file not found');
       return;
     }
 
     setIsCompiling(true);
-    setCompilationSuccess(null);
 
     // Handle TypeScript files separately
     if (file.name.endsWith('.ts')) {
@@ -126,14 +113,9 @@ export default function CompilePanel({files, refreshFiles}: CompilePanelProps) {
           toast.error('Send raw transaction failed');
           return;
         }
-        // const result = await rpcClient
-        //   .getClient(chainType)
-        //   .sendRawTransaction(rawTx);
-        // console.log("result", result);
-        setCompilationSuccess(true);
-        toast.success('TypeScript executed successfully');
+        addLog('TypeScript executed successfully');
       } catch (e) {
-        setCompilationSuccess(false);
+        addLog('Execution failed');
         toast.error('Execution failed');
       } finally {
         setIsCompiling(false);
@@ -153,29 +135,32 @@ export default function CompilePanel({files, refreshFiles}: CompilePanelProps) {
       const compilationFiles: FileType[] = [];
       files.some(f => {
         if (
-          f.name.endsWith('.c') ||
+          (f.name.endsWith('.c') ||
           f.name.endsWith('.h') ||
-          f.name.endsWith('.abi')
+          f.name.endsWith('.abi')) && !f.isDirectory
         ) {
           compilationFiles.push(f);
         }
       });
       if (compilationFiles.length === 0) {
-        // setCompilationOutput("No C files found");
-        setCompilationSuccess(false);
+        toast.error('No C files found');
         return;
       }
 
-      console.log('compilationFiles', compilationFiles, 'args ', args);
-
       const result = await compilerService.compile(compilationFiles, args);
-      console.log('compile result', result);
+      console.log('compiler result', result);
+      if (result.output.includes('Error')) {
+        addLog(
+          'Compilation failed for ' + file.name,
+          result.output,
+          LogLevel.ERROR,
+        );
+        return;
+      }
 
       if (result.code === 0) {
-        // setCompilationOutput(
-        //   result.output || `Compilation successful for ${file.name}`
-        // );
-        setCompilationSuccess(true);
+        toast.success('Compilation successful for ' + file.name);
+        addLog('Compilation successful for ' + file.name);
 
         // 处理输出文件
         await processOutputFiles(file, result.outputFiles);
@@ -186,18 +171,16 @@ export default function CompilePanel({files, refreshFiles}: CompilePanelProps) {
         }
         // generateTemplate(file.name);
       } else {
-        // setCompilationOutput(
-        //   result.output || `Compilation failed for ${file.name}`
-        // );
-        setCompilationSuccess(false);
+        toast.error('Compilation failed for ' + file.name);
+        addLog('Compilation failed for ' + file.name, result, LogLevel.ERROR);
       }
     } catch (error) {
-      // setCompilationOutput(
-      //   `Compilation error: ${
-      //     error instanceof Error ? error.message : String(error)
-      //   }`
-      // );
-      setCompilationSuccess(false);
+      toast.error('Compilation failed for ' + file.name);
+      addLog(
+        `Compilation error: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
     } finally {
       setIsCompiling(false);
     }
@@ -279,16 +262,17 @@ export default function CompilePanel({files, refreshFiles}: CompilePanelProps) {
       console.log('asm', asm);
 
       if (asm.success) {
-        // const compiledResult = compiledResultMap.get(sourceFile.name);
-        // if (compiledResult) {
-        //   compiledResultMap.delete(sourceFile.name);
-        // }
         const abiContent = JSON.parse(abiFile.content);
         abiContent.address = asm.hash;
         abiFile.content = JSON.stringify(abiContent);
 
         if (debugMode) {
-          await writeDbgFile(sourceFile.name, asm.debugInfo);
+          await saveFile({
+            id: sourceFile.name.split('.')[0] + '.dbg',
+            name: sourceFile.name.split('.')[0] + '.dbg',
+            content: asm.debugInfo,
+            lastModified: new Date().toISOString(),
+          });
         }
 
         setCompiledResult(sourceFile.name, {
@@ -311,16 +295,6 @@ export default function CompilePanel({files, refreshFiles}: CompilePanelProps) {
         lastModified: new Date().toISOString(),
       });
     }
-  };
-
-  const writeDbgFile = async (fileName: string, dbgContent: string) => {
-    const dbgFile: FileType = {
-      id: fileName.split('.')[0] + '.dbg',
-      name: fileName.split('.')[0] + '.dbg',
-      content: dbgContent,
-      lastModified: new Date().toISOString(),
-    };
-    await saveFile(dbgFile);
   };
 
   return (
@@ -452,40 +426,6 @@ export default function CompilePanel({files, refreshFiles}: CompilePanelProps) {
               </>
             )}
           </Button>
-
-          {compilationSuccess !== null && (
-            <div
-              className={`flex items-start gap-4 p-5 rounded-2xl animate-in fade-in slide-in-from-bottom-4 duration-500 ${
-                compilationSuccess
-                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                  : 'bg-destructive/10 text-destructive'
-              }`}
-            >
-              {compilationSuccess ? (
-                <div className="p-2 bg-emerald-500/20 rounded-full shrink-0">
-                  <CheckCircleIcon className="h-5 w-5" />
-                </div>
-              ) : (
-                <div className="p-2 bg-destructive/20 rounded-full shrink-0">
-                  <AlertCircleIcon className="h-5 w-5" />
-                </div>
-              )}
-              <div className="space-y-1">
-                <p className="text-sm font-black uppercase tracking-wider">
-                  {compilationSuccess ? 'Build Complete' : 'Build Error'}
-                </p>
-                <p className="text-xs font-medium leading-relaxed opacity-80">
-                  {selectedFile?.endsWith('.ts')
-                    ? compilationSuccess
-                      ? 'The script executed successfully and the transaction was broadcast to the network.'
-                      : 'Something went wrong during script execution. Please check the logs below.'
-                    : compilationSuccess
-                      ? 'Your contract has been built successfully and all debug symbols are ready.'
-                      : 'There was an error in your source code. Check the console for precise line numbers.'}
-                </p>
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </div>

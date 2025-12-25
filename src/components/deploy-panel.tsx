@@ -33,6 +33,8 @@ import {getFile, saveFile, createFolder} from '@/lib/db';
 import {generateContractTemplate} from '@/utils/templateGenerator';
 
 import {useCompilerStore} from '@/state/compiler';
+import {useDeployStore} from '@/state/deploy';
+import {useConsoleStore, LogLevel} from '@/lib/console-store';
 
 interface DeployPanelProps {
   files: FileType[];
@@ -43,15 +45,26 @@ export default function DeployPanel({files}: DeployPanelProps) {
   const compiledResultMap = useCompilerStore(state => state.compiledResultMap);
   const [isDeploying, setIsDeploying] = useState(false);
   const [deploymentResult, setDeploymentResult] = useState<string | null>(null);
-  const [privateKey, setPrivateKey] = useState('');
-  const [utxo, setUtxo] = useState('');
-  const [selectedFile, setSelectedFile] = useState<FileType | null>(null);
-  const [utxoValueStr, setUtxoValueStr] = useState<string>('');
+
+  const {
+    privateKey,
+    setPrivateKey,
+    utxo,
+    setUtxo,
+    utxoValueStr,
+    setUtxoValueStr,
+    selectedFileId,
+    setSelectedFileId,
+  } = useDeployStore();
+
+  const {addLog} = useConsoleStore();
 
   const cFiles = files.filter(file => file.name.endsWith('.c'));
 
+  const selectedFile = cFiles.find(file => file.id === selectedFileId) ?? null;
+
   const handleContractSelect = (fileId: string) => {
-    setSelectedFile(cFiles.find(file => file.id === fileId) ?? null);
+    setSelectedFileId(fileId);
   };
 
   const generateTemplate = async (sourceFileName: string) => {
@@ -116,9 +129,6 @@ export default function DeployPanel({files}: DeployPanelProps) {
     }
   };
 
-  const [isDeployedContractsExpanded, setIsDeployedContractsExpanded] =
-    useState(true);
-
   const handleDeploy = async () => {
     if (!selectedFile || !selectedFile.name.endsWith('.c')) {
       toast.error('Please select a contract to deploy');
@@ -137,6 +147,11 @@ export default function DeployPanel({files}: DeployPanelProps) {
     const [hash, index] = utxo.split(':');
     if (!hash || !index) {
       toast.error('Please enter a valid UTXO');
+      return;
+    }
+
+    if (!utxoValueStr) {
+      toast.error('Please enter a UTXO value');
       return;
     }
 
@@ -201,26 +216,27 @@ export default function DeployPanel({files}: DeployPanelProps) {
     const signedTx = await rpcClient
       .getClient(chainType)
       .signRawTransaction(rawTxHex, [], [privateKey], false);
-    if (!signedTx.hex) {
+    if (signedTx.error) {
       toast.error('Sign raw transaction failed');
+      addLog('Sign raw transaction failed', signedTx, LogLevel.ERROR);
       setIsDeploying(false);
       return;
     }
-    console.log('sign raw transaction result', signedTx);
+    addLog('Sign raw transaction result', signedTx);
 
     // sendrawtransaction
     const txHash = await rpcClient
       .getClient(chainType)
-      .sendRawTransaction(signedTx.hex);
-    if (!txHash) {
+      .sendRawTransaction(signedTx.result.hex);
+    if (txHash.error) {
       toast.error('Send raw transaction failed');
+      addLog('Send raw transaction failed', txHash, LogLevel.ERROR);
       setIsDeploying(false);
       return;
     }
-    console.log('txHash', txHash);
+    addLog('Send raw transaction result', txHash);
+    console.log('txHash', txHash.result);
     setIsDeploying(false);
-
-    toast.success('Transaction sent successfully');
 
     toast.success('Transaction sent successfully');
 
@@ -264,8 +280,8 @@ export default function DeployPanel({files}: DeployPanelProps) {
       // Since generateTemplate generates both timestamped and latest, referencing latest is safer/easier.
 
       const runData = {
-        hash: txHash,
-        contractAddress: '', // Requested to be empty
+        hash: txHash.result,
+        contractAddress: result.hash,
         transaction: {
           from: Address.toPkScript('mszzWYjHEpmGx2LmdZLtud64PADqFHNhHD'), // Using the specific change address logic from earlier
           gas: fee.toString(),

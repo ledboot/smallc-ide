@@ -123,6 +123,12 @@ export const createFolder = async (path: string): Promise<void> => {
     await ensureDir(parentPath);
   }
 
+  // Check if directory already exists
+  const exists = await fs.extended.exists(path);
+  if (exists) {
+    return;
+  }
+
   await fs.extended.mkdir(path);
 };
 

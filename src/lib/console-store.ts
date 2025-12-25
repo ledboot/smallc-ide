@@ -19,7 +19,7 @@ interface ConsoleStore {
   searchTerm: string;
   autoScroll: boolean;
 
-  addLog: (message: string, level?: LogLevel) => void;
+  addLog: (message?: any, ...optionalParams: any[]) => void;
   clearLogs: () => void;
   setSearchTerm: (term: string) => void;
   setAutoScroll: (enabled: boolean) => void;
@@ -31,12 +31,36 @@ export const useConsoleStore = create<ConsoleStore>((set, get) => ({
   searchTerm: '',
   autoScroll: true,
 
-  addLog: (message: string, level: LogLevel = LogLevel.INFO) => {
+  addLog: (message?: any, ...optionalParams: any[]) => {
+    // Combine arguments
+    const args = [message, ...optionalParams].filter(arg => arg !== undefined);
+
+    let level = LogLevel.INFO;
+
+    // Simplified logic: If last arg is a LogLevel, pop it and use it.
+    if (args.length > 0) {
+      const lastArg = args[args.length - 1];
+      if (Object.values(LogLevel).includes(lastArg as LogLevel)) {
+        level = args.pop(); // Remove the level from args, so args only contains messages
+      }
+    }
+
+    const logMessage = args
+      .map(m => {
+        if (typeof m === 'string') return m;
+        try {
+          return JSON.stringify(m, null, 2);
+        } catch (e) {
+          return String(m);
+        }
+      })
+      .join(' ');
+
     const newLog: LogEntry = {
       id: `${Date.now()}-${Math.random()}`,
       timestamp: new Date(),
       level,
-      message,
+      message: logMessage,
     };
 
     set(state => ({
