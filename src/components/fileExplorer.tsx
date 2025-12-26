@@ -17,7 +17,7 @@ import {
   ContextMenuTrigger,
   ContextMenuSeparator,
 } from '@/components/ui/context-menu';
-import type {FileType} from '@/lib/types';
+import type {FileType} from '@/types';
 import {
   saveFile,
   deleteFile,
@@ -38,12 +38,11 @@ import {
   FileTextIcon,
 } from 'lucide-react';
 import {toast} from 'sonner';
+import {useFileStore} from '@/state/useFile';
+
+import {useTabsStore} from '@/state/useTabs';
 
 interface FileExplorerProps {
-  files: FileType[];
-  setFiles: (files: FileType[]) => void;
-  currentFile: FileType | null;
-  setCurrentFile: (file: FileType | null) => void;
   onFileDelete?: (file: FileType) => void;
 }
 
@@ -100,13 +99,8 @@ const buildTreeFromFiles = (files: FileType[]): FileType[] => {
   return root;
 };
 
-export default function FileExplorer({
-  files,
-  setFiles,
-  currentFile,
-  setCurrentFile,
-  onFileDelete,
-}: FileExplorerProps) {
+export default function FileExplorer({onFileDelete}: FileExplorerProps) {
+  const {currentFile, handleOpenFile} = useTabsStore();
   const [isCreateFileDialogOpen, setIsCreateFileDialogOpen] = useState(false);
   const [isCreateFolderDialogOpen, setIsCreateFolderDialogOpen] =
     useState(false);
@@ -120,20 +114,12 @@ export default function FileExplorer({
   const [fileTree, setFileTree] = useState<FileType[]>([]);
   const [contextItem, setContextItem] = useState<FileType | null>(null);
   const [contextParentPath, setContextParentPath] = useState<string>('');
-
-  useEffect(() => {
-    loadFiles();
-  }, []);
+  const {files, addFile, refreshFiles} = useFileStore();
 
   useEffect(() => {
     const tree = buildTreeFromFiles(files);
     setFileTree(tree);
   }, [files]);
-
-  const loadFiles = async () => {
-    const loadedFiles = await getAllFiles();
-    setFiles(loadedFiles);
-  };
 
   const toggleFolder = (folderId: string) => {
     setExpandedFolders(prev => {
@@ -189,8 +175,8 @@ int main() {
     };
 
     await saveFile(newFile);
-    await loadFiles();
-    setCurrentFile(newFile);
+    addFile(newFile);
+    handleOpenFile(newFile);
     setNewFileName('');
     setIsCreateFileDialogOpen(false);
     toast.success(`Created ${fileName}`);
@@ -209,11 +195,19 @@ int main() {
       return;
     }
 
+    const newFolder: FileType = {
+      id: folderPath,
+      name: newFolderName,
+      isDirectory: true,
+      path: folderPath,
+      content: '',
+      lastModified: new Date().toISOString(),
+    };
+
     await createFolder(folderPath);
-    await loadFiles();
+    addFile(newFolder);
     setNewFolderName('');
     setIsCreateFolderDialogOpen(false);
-    toast.success(`Created folder ${newFolderName}`);
   };
 
   const handleRename = async () => {
@@ -238,15 +232,17 @@ int main() {
 
     try {
       await renameFile(oldPath, newPath);
-      await loadFiles();
+      await refreshFiles();
 
       if (currentFile && currentFile.id === oldPath) {
-        setCurrentFile(null);
+        handleOpenFile(null);
       }
 
       setIsRenameDialogOpen(false);
       setRenameValue('');
-      toast.success(`Renamed to ${renameValue}`);
+      toast.success(
+        `Renamed ${contextItem.isDirectory ? 'folder' : 'file'} to ${renameValue}`,
+      );
     } catch (error) {
       console.error('Rename error:', error);
       toast.error('Failed to rename');
@@ -260,10 +256,10 @@ int main() {
       } else {
         await deleteFile(item.id);
       }
-      await loadFiles();
+      await refreshFiles();
 
       if (currentFile && currentFile.id === item.id) {
-        setCurrentFile(null);
+        handleOpenFile(null);
       }
 
       // Notify parent about deletion
@@ -271,7 +267,9 @@ int main() {
         onFileDelete(item);
       }
 
-      toast.success(`Deleted ${item.name}`);
+      toast.success(
+        `Deleted ${item.isDirectory ? 'folder' : 'file'} ${item.name}`,
+      );
     } catch (error) {
       console.error('Delete error:', error);
       toast.error('Failed to delete');
@@ -304,7 +302,7 @@ int main() {
                   if (item.isDirectory) {
                     toggleFolder(item.id);
                   } else {
-                    setCurrentFile(item);
+                    handleOpenFile(item);
                   }
                 }}
               >

@@ -8,12 +8,10 @@ import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card';
 import {Badge} from '@/components/ui/badge';
 import {Checkbox} from '@/components/ui/checkbox';
 import {SearchIcon, ReplaceIcon, FileIcon} from 'lucide-react';
-import type {FileType} from '@/lib/types';
+import type {FileType} from '@/types';
+import {useFileStore} from '@/state/useFile';
 
-interface SearchPanelProps {
-  files: FileType[];
-  onFileSelect: (file: FileType) => void;
-}
+import {useTabsStore} from '@/state/useTabs';
 
 interface SearchResult {
   file: FileType;
@@ -23,7 +21,8 @@ interface SearchResult {
   match: string;
 }
 
-export default function SearchPanel({files, onFileSelect}: SearchPanelProps) {
+export default function SearchPanel() {
+  const {handleOpenFile} = useTabsStore();
   const [searchQuery, setSearchQuery] = useState('');
   const [replaceQuery, setReplaceQuery] = useState('');
   const [caseSensitive, setCaseSensitive] = useState(false);
@@ -31,6 +30,7 @@ export default function SearchPanel({files, onFileSelect}: SearchPanelProps) {
   const [useRegex, setUseRegex] = useState(false);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const {files} = useFileStore();
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
@@ -86,7 +86,7 @@ export default function SearchPanel({files, onFileSelect}: SearchPanelProps) {
   };
 
   const handleResultClick = (result: SearchResult) => {
-    onFileSelect(result.file);
+    handleOpenFile(result.file);
     // In a real implementation, you would also scroll to the specific line
   };
 

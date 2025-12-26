@@ -18,7 +18,7 @@ import {toast} from 'sonner';
 import {runContractMethod} from '@/utils/contractRunner';
 import {getFile} from '@/lib/db';
 import {PlayIcon} from 'lucide-react';
-import type {FileType} from '@/lib/types';
+import type {FileType} from '@/types';
 import {
   Tooltip,
   TooltipContent,
@@ -37,11 +37,7 @@ import {
 } from 'react-icons/vsc';
 
 import {DebugCallType} from '@/constants';
-
-interface DebugPanelProps {
-  files: FileType[];
-  setCurrentFile: (file: FileType | null) => void;
-}
+import {useFileStore} from '@/state/useFile';
 
 interface Breakpoint {
   lineNumber: number;
@@ -66,8 +62,11 @@ interface Variable {
   type: string;
 }
 
-export default function DebugPanel({files, setCurrentFile}: DebugPanelProps) {
+import {useTabsStore} from '@/state/useTabs';
+
+export default function DebugPanel() {
   const {chainType} = useRootStore().settings;
+  const {setCurrentFile} = useTabsStore();
   const [isDebugging, setIsDebugging] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [debugSession, setDebugSession] = useState<{
@@ -78,8 +77,9 @@ export default function DebugPanel({files, setCurrentFile}: DebugPanelProps) {
   const [variables, setVariables] = useState<Variable[]>([]);
 
   // Filter C files for debugging
+  const files = useFileStore(state => state.files);
   const cFiles = files.filter(file => file.name.endsWith('.c'));
-  const selectedFile = files.find(file => file.id === selectedFileId) || null;
+  const selectedFile = cFiles.find(file => file.id === selectedFileId) || null;
 
   const [transactionHash, setTransactionHash] = useState<string>('');
   const [latestRunData, setLatestRunData] = useState<any>(null);

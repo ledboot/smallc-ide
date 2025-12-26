@@ -8,14 +8,20 @@ export interface SettingsState {
   chainType: ChainType;
 }
 
+export interface SettingsActions {
+  setLocale: (locale: string) => void;
+  setNetworkType: (networkType: NetworkType) => void;
+  setChainType: (chainType: ChainType) => void;
+}
+
 const initialState: SettingsState = {
   locale: 'en',
   networkType: NetworkType.TESTNET,
   chainType: ChainType.ZENT_TESTNET,
 };
 
-export const settingsStore = create(
-  persist<SettingsState>(
+export const useSettingsStore = create(
+  persist<SettingsState & SettingsActions>(
     set => ({
       ...initialState,
       setLocale: (locale: string) => set({locale}),

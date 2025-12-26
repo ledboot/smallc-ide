@@ -1,7 +1,7 @@
 import {sha256 as nobleSha256} from '@noble/hashes/sha2.js';
 import bigInt from 'big-integer';
 import {getMonacoInstance} from '@/lib/monaco-instance';
-import {useConsoleStore, LogLevel} from '@/lib/console-store';
+import {useConsoleStore, LogLevel} from '@/state/useConsole';
 import {BUNDLED_UTILS_CODE} from './bundledUtils';
 
 /**

@@ -1,12 +1,12 @@
 import {create} from 'zustand';
-import type {FileType} from '@/lib/types';
+import type {FileType} from '@/types';
 import {getAllFiles} from '@/lib/db';
+import {HOME_TAB} from '@/constants';
 
 interface FileStore {
   files: FileType[];
   isLoading: boolean;
   error: string | null;
-
   // Actions
   setFiles: (files: FileType[]) => void;
   refreshFiles: () => Promise<void>;
@@ -19,6 +19,7 @@ export const useFileStore = create<FileStore>((set, get) => ({
   files: [],
   isLoading: false,
   error: null,
+  // currentFile managed by useTabsStore
 
   setFiles: files => set({files}),
 

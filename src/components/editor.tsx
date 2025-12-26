@@ -1,34 +1,29 @@
 'use client';
 
 import {useEffect, useRef} from 'react';
-import type {Breakpoint, FileType} from '@/lib/types';
+import type {Breakpoint, FileType} from '@/types';
 import {saveFile} from '@/lib/db';
 import {Editor as MonacoEditor} from '@monaco-editor/react';
-import {useCompilerStore} from '@/state/compiler';
+import {useCompilerStore} from '@/state/useCompiler';
 import * as monaco from 'monaco-editor';
+import {useFileStore} from '@/state/useFile';
+
+import {useTabsStore} from '@/state/useTabs';
 
 interface EditorProps {
-  file: FileType;
-  updateFile: (content: string) => void;
-  // onBreakpointsChange?: (breakpoints: Breakpoint[]) => void
   currentLine?: number;
 }
 
-export default function Editor({
-  file,
-  updateFile,
-  // onBreakpointsChange,
-  currentLine,
-}: EditorProps) {
+export default function Editor({currentLine}: EditorProps) {
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<typeof monaco | null>(null);
-  const compiledResultMap = useCompilerStore(state => state.compiledResultMap);
-  const removeCompiledResult = useCompilerStore(
-    state => state.removeCompiledResult,
-  );
+  const {compiledResultMap, removeCompiledResult} = useCompilerStore();
+  const {updateFile} = useFileStore();
+  const {currentFile} = useTabsStore();
 
   const getLanguage = (fileName: string, id: string) => {
+    if (!currentFile) return 'plaintext';
     if (id === 'home') return 'plaintext';
     if (fileName.endsWith('.sol')) return 'sol';
     if (fileName.endsWith('.c')) return 'c';
@@ -82,8 +77,8 @@ export default function Editor({
       if (!model) return;
 
       // Set breakpoints from file
-      if (file.breakpoints?.length) {
-        const breakpoints = file.breakpoints.filter(
+      if (currentFile?.breakpoints?.length) {
+        const breakpoints = currentFile.breakpoints.filter(
           bp => bp.lineNumber > 0 && bp.lineNumber <= model.getLineCount(),
         );
 
@@ -173,12 +168,14 @@ export default function Editor({
     };
   };
 
-  // Update breakpoint decorations when currentLine changes
-
   // Handle editor content changes
   const handleEditorChange = (value: string | undefined) => {
     if (value === undefined) return;
-    updateFile(value);
+    if (!currentFile) return;
+    if (currentFile.id === 'home') return;
+    currentFile.content = value;
+    currentFile.lastModified = new Date().toISOString();
+    updateFile(currentFile);
 
     // Debounce save operation
     if (saveTimeoutRef.current) {
@@ -186,14 +183,10 @@ export default function Editor({
     }
 
     saveTimeoutRef.current = setTimeout(() => {
-      saveFile({
-        ...file,
-        content: value,
-        lastModified: new Date().toISOString(),
-      });
+      saveFile(currentFile);
 
-      if (compiledResultMap.has(file.name)) {
-        removeCompiledResult(file.name);
+      if (compiledResultMap.has(currentFile.name)) {
+        removeCompiledResult(currentFile.name);
       }
     }, 500);
   };
@@ -201,6 +194,7 @@ export default function Editor({
   // Handle breakpoint changes
   const handleBreakpointChange = () => {
     if (!editorRef.current) return;
+    if (!currentFile) return;
     try {
       const model = editorRef.current.getModel();
       if (!model) return;
@@ -278,7 +272,7 @@ export default function Editor({
       console.log('breakpoints', breakpoints);
 
       // Update file.breakpoints if we have valid breakpoints
-      file.breakpoints = [...breakpoints];
+      currentFile.breakpoints = [...breakpoints];
     } catch (error) {
       console.error('Error handling breakpoint change:', error);
     }
@@ -339,20 +333,20 @@ export default function Editor({
     <div className="h-full w-full">
       <MonacoEditor
         height="100%"
-        path={file.id}
-        language={getLanguage(file.name, file.id)}
-        value={file.content}
+        path={currentFile?.id}
+        language={getLanguage(currentFile?.name || '', currentFile?.id || '')}
+        value={currentFile?.content}
         onChange={handleEditorChange}
         onMount={handleEditorDidMount}
         theme="github-light"
         options={{
-          readOnly: file.id === 'home',
+          readOnly: currentFile?.id === 'home',
           // Disable syntax checking for home tab
-          quickSuggestions: file.id !== 'home',
-          suggestOnTriggerCharacters: file.id !== 'home',
-          parameterHints: {enabled: file.id !== 'home'},
-          codeLens: file.id !== 'home',
-          lightbulb: {enabled: file.id !== 'home'},
+          quickSuggestions: currentFile?.id !== 'home',
+          suggestOnTriggerCharacters: currentFile?.id !== 'home',
+          parameterHints: {enabled: currentFile?.id !== 'home'},
+          codeLens: currentFile?.id !== 'home',
+          lightbulb: {enabled: currentFile?.id !== 'home'},
           minimap: {
             enabled: true,
             side: 'right',
@@ -366,11 +360,11 @@ export default function Editor({
           wordWrap: 'on',
           automaticLayout: true,
           tabSize: 2,
-          glyphMargin: file.id !== 'home',
+          glyphMargin: currentFile?.id !== 'home',
           lineNumbersMinChars: 3,
           folding: true,
           lineDecorationsWidth: 10,
-          lineNumbers: file.id === 'home' ? 'off' : 'on',
+          lineNumbers: currentFile?.id === 'home' ? 'off' : 'on',
           contextmenu: true,
           scrollBeyondLastLine: false,
           renderLineHighlight: 'line',

@@ -43,8 +43,7 @@ This project is a Next.js, React, Monaco Editor & TypeScript application that pr
 
 ### General Rules
 - PascalCase for: Components, Type definitions, Interfaces
-- kebab-case for: Directory names (e.g., components/auth-wizard), File names (e.g., user-profile.tsx)
-- camelCase for: Variables, Functions, Methods, Hooks, Properties, Props
+- camelCase for: Variables, Functions, Methods, Hooks, Properties, Props,Directory names,File names
 - UPPERCASE for: Environment variables, Constants, Global configurations
 
 ### Specific Naming Patterns

@@ -5,8 +5,8 @@ import {Button} from '@/components/ui/button';
 import {Input} from '@/components/ui/input';
 import {Trash2, Search, ChevronDown, ChevronUp} from 'lucide-react';
 import {toast} from 'sonner';
-import {useConsoleStore, type LogEntry} from '@/lib/console-store';
-import {cn} from '@/lib/utils';
+import {useConsoleStore, type LogEntry} from '@/state/useConsole';
+import {cn} from '@/utils';
 
 const ConsolePanel = () => {
   const {

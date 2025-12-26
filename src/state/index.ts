@@ -1,10 +1,10 @@
 import {create} from 'zustand';
-import {settingsStore} from './settings';
+import {useSettingsStore} from './useSettings';
 
 export type AppState = {
-  settings: ReturnType<typeof settingsStore.getState>;
+  settings: ReturnType<typeof useSettingsStore.getState>;
 };
 
 export const useRootStore = create<AppState>()(() => ({
-  settings: settingsStore.getState(),
+  settings: useSettingsStore.getState(),
 }));

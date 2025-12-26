@@ -1,5 +1,5 @@
 import type {FileType} from './types';
-import {joinPath, getParentPath, getFileName} from './path-utils';
+import {joinPath, getParentPath, getFileName} from '../utils/path-utils';
 import {getFS} from './fs';
 
 /**

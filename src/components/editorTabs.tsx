@@ -2,7 +2,7 @@
 
 import {useRef, useEffect} from 'react';
 import {X, Home} from 'lucide-react';
-import type {FileType} from '@/lib/types';
+import type {FileType} from '@/types';
 
 interface EditorTabsProps {
   openTabs: FileType[];

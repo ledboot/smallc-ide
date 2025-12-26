@@ -1,5 +1,5 @@
 import {create} from 'zustand';
-import type {CompiledResult} from '@/lib/types';
+import type {CompiledResult} from '@/types';
 
 interface CompilerState {
   compiledResultMap: Map<string, CompiledResult>;

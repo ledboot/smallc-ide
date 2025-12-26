@@ -19,10 +19,10 @@ import {
   InfoIcon,
   FileIcon,
 } from 'lucide-react';
-import type {FileType} from '@/lib/types';
+import type {FileType} from '@/types';
 import {ChainType, CHAIN_INFO} from '@/constants';
 import {useRootStore} from '@/state';
-import {settingsStore} from '@/state/settings';
+import {useSettingsStore} from '@/state/useSettings';
 import {toast} from 'sonner';
 import {MsgT} from '@/utils/msgTools';
 import {rpcClient} from '@/lib/api';
@@ -32,19 +32,17 @@ import {Address} from '@/utils/address';
 import {getFile, saveFile, createFolder} from '@/lib/db';
 import {generateContractTemplate} from '@/utils/templateGenerator';
 
-import {useCompilerStore} from '@/state/compiler';
-import {useDeployStore} from '@/state/deploy';
-import {useConsoleStore, LogLevel} from '@/lib/console-store';
+import {useCompilerStore} from '@/state/useCompiler';
+import {useDeployStore} from '@/state/useDeploy';
+import {useConsoleStore, LogLevel} from '@/state/useConsole';
+import {useFileStore} from '@/state/useFile';
 
-interface DeployPanelProps {
-  files: FileType[];
-}
-
-export default function DeployPanel({files}: DeployPanelProps) {
+export default function DeployPanel() {
   const {chainType} = useRootStore().settings;
   const compiledResultMap = useCompilerStore(state => state.compiledResultMap);
   const [isDeploying, setIsDeploying] = useState(false);
   const [deploymentResult, setDeploymentResult] = useState<string | null>(null);
+  const {setChainType} = useSettingsStore();
 
   const {
     privateKey,
@@ -58,6 +56,8 @@ export default function DeployPanel({files}: DeployPanelProps) {
   } = useDeployStore();
 
   const {addLog} = useConsoleStore();
+
+  const files = useFileStore(state => state.files);
 
   const cFiles = files.filter(file => file.name.endsWith('.c'));
 
@@ -328,7 +328,7 @@ export default function DeployPanel({files}: DeployPanelProps) {
   };
 
   const handleSetChainType = (chainType: ChainType) => {
-    settingsStore.setState({chainType});
+    setChainType(chainType);
   };
   return (
     <div className="flex h-full flex-col p-2 pt-4 space-y-10">

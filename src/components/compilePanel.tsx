@@ -13,7 +13,7 @@ import {Label} from '@/components/ui/label';
 import {Badge} from '@/components/ui/badge';
 import {PlayIcon, InfoIcon, FileIcon, Bug} from 'lucide-react';
 import {Switch} from '@/components/ui/switch';
-import type {CompiledResult, FileType} from '@/lib/types';
+import type {CompiledResult, FileType} from '@/types';
 import {compilerService, isWasmReady} from '@/lib/wasm-compiler';
 import {createFolder, getFile, saveFile} from '@/lib/db';
 import {toast} from 'sonner';
@@ -22,18 +22,18 @@ import {Asm} from '@/lib/asm';
 
 import {generateContractTemplate} from '@/utils/templateGenerator';
 import {runContractMethod} from '@/utils/contractRunner';
-import {LogLevel, useConsoleStore} from '@/lib/console-store';
+import {LogLevel, useConsoleStore} from '@/state/useConsole';
 import {rpcClient} from '@/lib/api';
 import {useRootStore} from '@/state';
-import {useCompilerStore} from '@/state/compiler';
+import {useCompilerStore} from '@/state/useCompiler';
 import {Input} from './ui/input';
+import {useFileStore} from '@/state/useFile';
 
 interface CompilePanelProps {
-  files: FileType[];
   refreshFiles?: () => Promise<void>;
 }
 
-export default function CompilePanel({files, refreshFiles}: CompilePanelProps) {
+export default function CompilePanel({refreshFiles}: CompilePanelProps) {
   const [selectedFile, setSelectedFile] = useState<string>('');
   const [isCompiling, setIsCompiling] = useState(false);
 
@@ -45,6 +45,7 @@ export default function CompilePanel({files, refreshFiles}: CompilePanelProps) {
   const compiledResultMap = useCompilerStore(state => state.compiledResultMap);
   const setCompiledResult = useCompilerStore(state => state.setCompiledResult);
   const [executeMethod, setExecuteMethod] = useState('');
+  const files = useFileStore(state => state.files);
 
   // Filter out .c and .ts files
   const sourceFiles = files.filter(
@@ -136,8 +137,9 @@ export default function CompilePanel({files, refreshFiles}: CompilePanelProps) {
       files.some(f => {
         if (
           (f.name.endsWith('.c') ||
-          f.name.endsWith('.h') ||
-          f.name.endsWith('.abi')) && !f.isDirectory
+            f.name.endsWith('.h') ||
+            f.name.endsWith('.abi')) &&
+          !f.isDirectory
         ) {
           compilationFiles.push(f);
         }

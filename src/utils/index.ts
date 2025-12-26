@@ -13,6 +13,9 @@ import {
 } from './defs';
 import {Reader} from './reader';
 
+import {clsx, type ClassValue} from 'clsx';
+import {twMerge} from 'tailwind-merge';
+
 // 辅助函数：将字符转换为半字节值
 export function nib(charCode: number): number {
   if (charCode >= 48 && charCode <= 57) return charCode - 48; // 0-9
@@ -194,4 +197,8 @@ export function padLeft(str: string, bits: number) {
   bits = bits || 8;
   const missing = str.length % bits;
   return (missing ? new Array(bits - missing + 1).join('0') : '') + str;
+}
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
 }
