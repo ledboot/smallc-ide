@@ -94,8 +94,11 @@ export default function CompilePanel({refreshFiles}: CompilePanelProps) {
           return;
         }
         console.log('rawTx', rawTx);
-        const privateKey =
-          'cUPvqzYW2anTXKp2eARPTAxQfP5x2dMNg9bndqCPRiPtrrbo8BT4';
+        const privateKey = process.env.NEXT_PUBLIC_PRIVATE_KEY || '';
+        if (!privateKey) {
+          toast.error('Private key not found in environment variables');
+          return;
+        }
         // signrawtransaction
         const signedTx = await rpcClient
           .getClient(chainType)

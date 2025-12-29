@@ -1,7 +1,6 @@
 import {create} from 'zustand';
 import type {FileType} from '@/types';
 import {getAllFiles} from '@/lib/db';
-import {HOME_TAB} from '@/constants';
 
 interface FileStore {
   files: FileType[];

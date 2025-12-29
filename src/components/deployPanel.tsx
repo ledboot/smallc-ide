@@ -43,6 +43,7 @@ export default function DeployPanel() {
   const [isDeploying, setIsDeploying] = useState(false);
   const [deploymentResult, setDeploymentResult] = useState<string | null>(null);
   const {setChainType} = useSettingsStore();
+  const {files, refreshFiles} = useFileStore();
 
   const {
     privateKey,
@@ -57,8 +58,6 @@ export default function DeployPanel() {
 
   const {addLog} = useConsoleStore();
 
-  const files = useFileStore(state => state.files);
-
   const cFiles = files.filter(file => file.name.endsWith('.c'));
 
   const selectedFile = cFiles.find(file => file.id === selectedFileId) ?? null;
@@ -67,7 +66,10 @@ export default function DeployPanel() {
     setSelectedFileId(fileId);
   };
 
-  const generateTemplate = async (sourceFileName: string) => {
+  const generateTemplate = async (
+    sourceFileName: string,
+    timestamp: string,
+  ) => {
     try {
       const baseName = sourceFileName.split('.').slice(0, -1).join('.');
       const abiFileName = `/${baseName}.abi`;
@@ -93,7 +95,6 @@ export default function DeployPanel() {
       }
 
       // Save to .build directory
-      const timestamp = Math.floor(Date.now() / 1000).toString();
       const timestampFilename = `${baseName}_${timestamp}.ts`;
       const latestFilename = `${baseName}_latest.ts`;
 
@@ -121,11 +122,13 @@ export default function DeployPanel() {
       toast.success('Template generated', {
         description: `Saved to .build/${latestFilename}`,
       });
+      return timestampFile.id;
     } catch (error) {
       console.error('Failed to generate template:', error);
       toast.error('Failed to generate template', {
         description: error instanceof Error ? error.message : 'Unknown error',
       });
+      return '';
     }
   };
 
@@ -239,8 +242,9 @@ export default function DeployPanel() {
     setIsDeploying(false);
 
     toast.success('Transaction sent successfully');
+    const timestamp = Math.floor(Date.now() / 1000).toString();
 
-    await generateTemplate(selectedFile.name);
+    const templateFileId = await generateTemplate(selectedFile.name, timestamp);
 
     // --- Persistence Logic ---
     try {
@@ -263,32 +267,16 @@ export default function DeployPanel() {
         }
       }
 
-      // We assume generateTemplate creates this file. Ideally we'd get the path returned,
-      // but constructing it here matches the logic in generateTemplate.
-      const timestamp = Math.floor(Date.now() / 1000).toString();
-      // Note: generateTemplate typically runs *after* this, but we are inside handleDeploy.
-      // Actually generateTemplate generates the file we need to reference.
-      // We should use the path that generateTemplate WILL create or HAS created.
-      // Since we await generateTemplate above, the file should exist.
-      // However, generateTemplate uses a timestamp generated inside it.
-      // Wait, generateTemplate is defined below and uses `Math.floor(Date.now() / 1000)`.
-      // If we want the exact same timestamp, we might need to modify generateTemplate or pass it in.
-      // For now, let's assume "run-latest.json" points to the "latest" ts file.
-
-      const tsFile = `/.build/${baseName}_latest.ts`;
-      // The requirement says: tsFile is the generated ts file.
-      // Since generateTemplate generates both timestamped and latest, referencing latest is safer/easier.
-
       const runData = {
         hash: txHash.result,
         contractAddress: result.hash,
         transaction: {
-          from: Address.toPkScript('mszzWYjHEpmGx2LmdZLtud64PADqFHNhHD'), // Using the specific change address logic from earlier
+          from: 'mszzWYjHEpmGx2LmdZLtud64PADqFHNhHD',
           gas: fee.toString(),
           input: rawTxHex,
-          chainId: chainType, // or specific ID if needed, using chainType string for now
+          chainId: chainType,
         },
-        tsFile: tsFile,
+        tsFile: templateFileId,
         methodIdentifiers: methodIdentifiers,
       };
 
@@ -318,13 +306,13 @@ export default function DeployPanel() {
         isDirectory: false,
         lastModified: new Date().toISOString(),
       });
+      refreshFiles();
 
       console.log('Deployment info saved to', runLatestFilename);
     } catch (e) {
       console.error('Failed to persist deployment info', e);
       toast.error('Failed to save deployment info');
     }
-    // --- End Persistence Logic ---
   };
 
   const handleSetChainType = (chainType: ChainType) => {

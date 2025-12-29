@@ -9,6 +9,8 @@ import * as monaco from 'monaco-editor';
 import {useFileStore} from '@/state/useFile';
 
 import {useTabsStore} from '@/state/useTabs';
+import {useDebugStore} from '@/state/useDebugStore';
+import {toast} from 'sonner';
 
 interface EditorProps {
   currentLine?: number;
@@ -21,6 +23,7 @@ export default function Editor({currentLine}: EditorProps) {
   const {compiledResultMap, removeCompiledResult} = useCompilerStore();
   const {updateFile} = useFileStore();
   const {currentFile} = useTabsStore();
+  const {toggleBreakpoint} = useDebugStore();
 
   const getLanguage = (fileName: string, id: string) => {
     if (!currentFile) return 'plaintext';
@@ -39,6 +42,46 @@ export default function Editor({currentLine}: EditorProps) {
     if (fileName.endsWith('.ts')) return 'typescript';
     return 'plaintext';
   };
+
+  const updateBreakpoints = (
+    editor: monaco.editor.IStandaloneCodeEditor,
+    breakpoints: Breakpoint[],
+  ) => {
+    const model = editor.getModel();
+    if (!model) return;
+
+    // Clear existing first
+    const oldDecorations = model
+      .getAllDecorations()
+      .filter(d =>
+        d.options.glyphMarginClassName?.includes('breakpoint-glyph'),
+      );
+    editor.deltaDecorations(
+      oldDecorations.map(d => d.id),
+      [],
+    );
+
+    const decorations = breakpoints.map(bp => ({
+      range: new monaco.Range(bp.lineNumber, 1, bp.lineNumber, 1),
+      options: {
+        isWholeLine: false,
+        glyphMarginClassName: `breakpoint-glyph ${
+          bp.enabled === false ? 'breakpoint-disabled' : ''
+        }`,
+        stickiness: 1 /* NeverGrowsWhenTypingAtEdges */,
+      },
+    }));
+
+    if (decorations.length > 0) {
+      editor.deltaDecorations([], decorations);
+    }
+  };
+
+  // Sync breakpoints effect
+  useEffect(() => {
+    if (!editorRef.current || !currentFile) return;
+    updateBreakpoints(editorRef.current, currentFile.breakpoints || []);
+  }, [currentFile?.breakpoints, currentFile?.name]);
 
   const handleEditorDidMount = (
     editor: monaco.editor.IStandaloneCodeEditor,
@@ -72,100 +115,37 @@ export default function Editor({currentLine}: EditorProps) {
       'file:///node_modules/@types/external-libs/index.d.ts',
     );
 
-    const setupBreakpoints = () => {
-      const model = editor.getModel();
-      if (!model) return;
-
-      // Set breakpoints from file
-      if (currentFile?.breakpoints?.length) {
-        const breakpoints = currentFile.breakpoints.filter(
-          bp => bp.lineNumber > 0 && bp.lineNumber <= model.getLineCount(),
-        );
-
-        // Add breakpoint decorations for valid breakpoints
-        const decorations = breakpoints.map(bp => ({
-          range: new monaco.Range(bp.lineNumber, 1, bp.lineNumber, 1),
-          options: {
-            isWholeLine: false,
-            glyphMarginClassName: `breakpoint-glyph ${
-              bp.enabled === false ? 'breakpoint-disabled' : ''
-            }`,
-            glyphMarginHoverMessage: bp.condition
-              ? {value: `Condition: ${bp.condition}`}
-              : undefined,
-            stickiness: 1 /* NeverGrowsWhenTypingAtEdges */,
-          },
-        }));
-
-        if (decorations.length > 0) {
-          editor.deltaDecorations([], decorations);
-        }
-      }
-    };
-
-    // Initial setup
-    setupBreakpoints();
+    // Initial breakpoints render
+    updateBreakpoints(editor, currentFile?.breakpoints || []);
 
     // Handle gutter clicks for breakpoints
     editor.onMouseDown(async e => {
       if (
         !e.target ||
-        e.target.type !== monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN
+        (e.target.type !== monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN &&
+          e.target.type !== monaco.editor.MouseTargetType.GUTTER_LINE_NUMBERS)
       ) {
         return;
       }
 
-      const model = editor.getModel();
+      if (!editorRef.current) return;
+      const {currentFile} = useTabsStore.getState();
+      const model = editorRef.current.getModel();
       if (!model) return;
+      // Check validation for C files
+      if (!currentFile) return;
+      if (!currentFile?.name.endsWith('.c')) return;
 
       const lineNumber = e.target.position?.lineNumber;
       if (!lineNumber || lineNumber < 1 || lineNumber > model.getLineCount())
         return;
 
-      // Toggle breakpoint
-      const decorations = editor.getLineDecorations(lineNumber) || [];
-      const existingBreakpoint = decorations.find(d =>
-        d.options.glyphMarginClassName?.includes('breakpoint-glyph'),
-      );
-
-      try {
-        if (existingBreakpoint) {
-          // Remove breakpoint
-          editor.deltaDecorations([existingBreakpoint.id], []);
-        } else {
-          // Add breakpoint
-          const range = new monaco.Range(lineNumber, 1, lineNumber, 1);
-          editor.deltaDecorations(
-            [],
-            [
-              {
-                range,
-                options: {
-                  isWholeLine: false,
-                  glyphMarginClassName: 'breakpoint-glyph',
-                  stickiness: 1 /* NeverGrowsWhenTypingAtEdges */,
-                },
-              },
-            ],
-          );
-        }
-
-        // Trigger breakpoint change handler
-        handleBreakpointChange();
-      } catch (error) {
-        console.error('Error toggling breakpoint:', error);
+      const success = toggleBreakpoint(lineNumber, currentFile.id);
+      if (!success) {
+        toast.error(`Cannot set breakpoint at line ${lineNumber}`);
+        return;
       }
     });
-
-    // Re-setup breakpoints when model changes
-    const disposable = editor.onDidChangeModel(() => {
-      setupBreakpoints();
-    });
-
-    // Cleanup
-    return () => {
-      disposable.dispose();
-    };
   };
 
   // Handle editor content changes
@@ -189,93 +169,6 @@ export default function Editor({currentLine}: EditorProps) {
         removeCompiledResult(currentFile.name);
       }
     }, 500);
-  };
-
-  // Handle breakpoint changes
-  const handleBreakpointChange = () => {
-    if (!editorRef.current) return;
-    if (!currentFile) return;
-    try {
-      const model = editorRef.current.getModel();
-      if (!model) return;
-
-      const decorations = model.getAllDecorations();
-      const breakpointDecorations = decorations.filter(d =>
-        d.options.glyphMarginClassName?.includes('breakpoint-glyph'),
-      );
-
-      const breakpoints: Breakpoint[] = [];
-      console.log('breakpointDecorations', breakpointDecorations);
-
-      for (const d of breakpointDecorations) {
-        const lineNumber = d.range.startLineNumber;
-        const lineContent = model.getLineContent(lineNumber) || '';
-
-        // Skip invalid line numbers or empty lines
-        if (
-          lineNumber < 1 ||
-          lineNumber > model.getLineCount() ||
-          !lineContent.trim()
-        ) {
-          // Remove invalid breakpoint decorations
-          if (d.id) {
-            editorRef.current.deltaDecorations([d.id], []);
-          }
-          continue;
-        }
-
-        // Ensure we have valid column positions
-        const lineLength = Math.max(1, lineContent.length);
-        const startColumn = Math.min(1, lineLength);
-        const endColumn = Math.max(1, lineLength);
-
-        // Update the decoration if the range is invalid
-        if (
-          d.range.startColumn !== startColumn ||
-          d.range.endColumn !== endColumn
-        ) {
-          const newRange = new monaco.Range(
-            lineNumber,
-            startColumn,
-            lineNumber,
-            endColumn,
-          );
-          editorRef.current.deltaDecorations(
-            [d.id],
-            [
-              {
-                range: newRange,
-                options: d.options,
-              },
-            ],
-          );
-        }
-
-        // Add the breakpoint to our list
-        breakpoints.push({
-          lineNumber,
-          enabled: !d.options.glyphMarginClassName?.includes(
-            'breakpoint-disabled',
-          ),
-          condition:
-            typeof d.options.glyphMarginHoverMessage === 'object' &&
-            d.options.glyphMarginHoverMessage &&
-            'value' in d.options.glyphMarginHoverMessage
-              ? String(d.options.glyphMarginHoverMessage.value).replace(
-                  'Condition: ',
-                  '',
-                )
-              : undefined,
-        });
-      }
-
-      console.log('breakpoints', breakpoints);
-
-      // Update file.breakpoints if we have valid breakpoints
-      currentFile.breakpoints = [...breakpoints];
-    } catch (error) {
-      console.error('Error handling breakpoint change:', error);
-    }
   };
 
   // Update current line highlighting when currentLine changes

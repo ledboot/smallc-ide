@@ -80,8 +80,8 @@ class RPCClient {
   }
 
   // fn: detach、attach、clearbreakpoint、breakpoint、
-  async debugCall(fn: DebugCallType) {
-    return this.rpcCall('vmdebug', [fn]);
+  async debugCall(fn: DebugCallType, params: any[] = []) {
+    return this.rpcCall('vmdebug', [fn, ...params]);
   }
 
   async signRawTransaction(

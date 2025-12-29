@@ -26,10 +26,10 @@ export interface FileType {
 export interface Breakpoint {
   lineNumber: number;
   enabled: boolean;
-  condition?: string;
 }
 
 export interface DebugInfo {
+  isPaused: boolean;
   currentLine?: number;
   callStack: CallFrame[];
   variables: Variable[];
@@ -52,4 +52,12 @@ export interface CompiledResult {
   bytecode: string;
   abi: string;
   hash: string;
+}
+
+export interface DebugNode {
+  code: string;
+  begin: number;
+  end: number;
+  lines: [number, number][]; // [vmOffset, sourceLine]
+  body?: number; // Constructor offset
 }

@@ -9,7 +9,6 @@ export const setMonacoInstance = (
 ) => {
   monacoInstance = monaco;
   editorInstance = editor;
-  console.log('Monaco instance set');
 };
 
 export const getMonacoInstance = () => {
