@@ -64,6 +64,7 @@ export default function DebugPanel() {
     toggleBreakpoint,
     setCurrentDebugFileId,
     currentDebugFileId,
+    setCurrentLine,
   } = useDebugStore(
     useShallow(state => ({
       isDebugging: state.isDebugging,
@@ -77,6 +78,7 @@ export default function DebugPanel() {
       toggleBreakpoint: state.toggleBreakpoint,
       setCurrentDebugFileId: state.setCurrentDebugFileId,
       currentDebugFileId: state.currentDebugFileId,
+      setCurrentLine: state.setCurrentLine,
     })),
   );
 
@@ -178,24 +180,25 @@ export default function DebugPanel() {
         toast.error('Private key not found in environment variables');
         return;
       }
-      // signrawtransaction
-      const signedTx = await rpcClient
-        .getClient(chainType)
-        .signRawTransaction(rawTx, [], [privateKey], false);
-      if (signedTx.error) {
-        toast.error('Sign raw transaction failed');
-        return;
-      }
-      console.log('sign raw transaction result', signedTx);
+      // // signrawtransaction
+      // const signedTx = await rpcClient
+      //   .getClient(chainType)
+      //   .signRawTransaction(rawTx, [], [privateKey], false);
+      // if (signedTx.error) {
+      //   toast.error('Sign raw transaction failed');
+      //   return;
+      // }
+      // console.log('sign raw transaction result', signedTx);
 
-      // sendrawtransaction
-      const txHash = await rpcClient
-        .getClient(chainType)
-        .sendRawTransaction(signedTx.result.hex);
-      if (txHash.error) {
-        toast.error('Send raw transaction failed');
-        return;
-      }
+      // // sendrawtransaction
+      // const txHash = await rpcClient
+      //   .getClient(chainType)
+      //   .sendRawTransaction(signedTx.result.hex);
+      // if (txHash.error) {
+      //   toast.error('Send raw transaction failed');
+      //   return;
+      // }
+      const txHash = await rpcClient.getClient(chainType).tryContract(rawTx);
       addLog('TypeScript executed successfully', txHash);
     } catch (e) {
       console.error('Method execution failed', e);
@@ -219,18 +222,23 @@ export default function DebugPanel() {
         toast.warning('set breakpoints first to attach debug session');
         return;
       }
-      rpcClient.getClient(chainType).debugCall(DebugCallType.attach);
-      console.log('after debugCall');
-      console.log('breakpoints', debugFile.breakpoints);
-      for (const bp of debugFile.breakpoints || []) {
+      const attachResult = await rpcClient
+        .getClient(chainType)
+        .debugCall(DebugCallType.attach);
+      console.log('attach result:', attachResult);
 
+      // 3. Sync all breakpoints to VM
+      const sortedBreakpoints = [...(debugFile.breakpoints || [])].sort(
+        (a, b) => a.lineNumber - b.lineNumber,
+      );
+
+      for (const bp of sortedBreakpoints) {
         const vmOffset = useDebugStore.getState().mapSourceToVm(bp.lineNumber);
         if (vmOffset !== null) {
-          const offset = vmOffset.toString();
           try {
             await rpcClient
               .getClient(chainType)
-              .debugCall(DebugCallType.breakpoint, [offset]);
+              .debugCall(DebugCallType.breakpoint, ['', vmOffset]);
           } catch (e) {
             console.error(
               `Failed to sync breakpoint at line ${bp.lineNumber}`,
@@ -239,6 +247,25 @@ export default function DebugPanel() {
           }
         }
       }
+
+      // 4. Enter debug mode and highlight first breakpoint
+      setIsDebugging(true);
+      setIsPaused(true);
+      setDebugSession({
+        sessionId: 'default',
+        breakpoints: sortedBreakpoints.map(bp => ({
+          line: bp.lineNumber,
+          file: debugFile.name,
+        })),
+      });
+
+      // Set current line to the first breakpoint
+      const firstBreakpoint = sortedBreakpoints[0];
+      if (firstBreakpoint) {
+        setCurrentLine(firstBreakpoint.lineNumber);
+      }
+
+      toast.success('Debug session attached');
     } catch (error) {
       console.error('Attach failed:', error);
       toast.error('Failed to attach debug session');
@@ -291,6 +318,7 @@ export default function DebugPanel() {
       setIsDebugging(false);
       setIsPaused(false);
       setDebugSession(null);
+      setCurrentLine(null);
     }
   };
 

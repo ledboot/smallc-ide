@@ -6,9 +6,9 @@ import {bytesToHex2, hashReverse} from '@/utils/index';
 import {MsgT} from '@/utils/msgTools';
 import {rpcClient} from '@/lib/api';
 import {ToutDef} from '@/utils/defs';
-import {useRootStore} from '@/state';
-import {generateContractTemplate} from '@/utils/templateGenerator';
 import {saveFile, createFolder} from '@/lib/db';
+import {useSettingsStore} from '@/state/useSettings';
+import {generateContractTemplate} from '@/utils/templateGenerator';
 
 export interface ContractMethod {
   signature: string;
@@ -29,7 +29,7 @@ export const DeployedContractCard = ({
   contractName,
 }: DeployedContractCardProps) => {
   const [inputValues, setInputValues] = useState<Record<string, string>>({});
-  const {chainType} = useRootStore().settings;
+  const chainType = useSettingsStore(state => state.chainType);
 
   const handleInputChange = (methodSignature: string, value: string) => {
     setInputValues(prev => ({
@@ -103,7 +103,7 @@ export const DeployedContractCard = ({
       '6f': '41000000',
       '3f': '41000000',
       '7b': '42000000',
-      'c4': '42000000',
+      c4: '42000000',
       '05': '42000000',
       '78': '43000000',
       '67': '43000000',

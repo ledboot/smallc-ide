@@ -106,6 +106,10 @@ class RPCClient {
   async contractCall(contractAddress: string, params: string) {
     return this.rpcCall('contractcall', [contractAddress, params]);
   }
+
+  async tryContract(hex: string) {
+    return this.rpcCall('trycontract', [hex]);
+  }
 }
 
 export const getRPCClient = (chainType: ChainType = ChainType.ZENT_TESTNET) => {

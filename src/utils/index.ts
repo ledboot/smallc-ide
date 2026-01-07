@@ -13,9 +13,6 @@ import {
 } from './defs';
 import {Reader} from './reader';
 
-import {clsx, type ClassValue} from 'clsx';
-import {twMerge} from 'tailwind-merge';
-
 // 辅助函数：将字符转换为半字节值
 export function nib(charCode: number): number {
   if (charCode >= 48 && charCode <= 57) return charCode - 48; // 0-9
@@ -81,6 +78,30 @@ export function hashReverse(h: string): string {
     s = h.charAt(i) + h.charAt(i + 1) + s;
   }
   return s;
+}
+
+/**
+ * 对应 PHP 的 rev16，实现 16 位（4位十六进制字符）字节序反转
+ */
+export function rev16(hex: string): string {
+  const cleanHex = hex.replace('0x', '').padStart(4, '0');
+  return cleanHex.slice(2, 4) + cleanHex.slice(0, 2);
+}
+
+/**
+ * 对应 PHP 的 rev，实现 32 位（8位十六进制字符）字节序反转
+ */
+export function rev32(hex: string): string {
+  const cleanHex = hex.replace('0x', '').padStart(8, '0');
+  return rev16(cleanHex.slice(4, 8)) + rev16(cleanHex.slice(0, 4));
+}
+
+/**
+ * 对应 PHP 的 rev64，实现 64 位（16位十六进制字符）字节序反转
+ */
+export function rev64(hex: string): string {
+  const cleanHex = hex.replace('0x', '').padStart(16, '0');
+  return rev32(cleanHex.slice(8, 16)) + rev32(cleanHex.slice(0, 8));
 }
 
 export function rawTxDecode(hex: string) {
@@ -197,8 +218,4 @@ export function padLeft(str: string, bits: number) {
   bits = bits || 8;
   const missing = str.length % bits;
   return (missing ? new Array(bits - missing + 1).join('0') : '') + str;
-}
-
-export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
 }

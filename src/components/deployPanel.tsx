@@ -21,7 +21,6 @@ import {
 } from 'lucide-react';
 import type {FileType} from '@/types';
 import {ChainType, CHAIN_INFO} from '@/constants';
-import {useRootStore} from '@/state';
 import {useSettingsStore} from '@/state/useSettings';
 import {toast} from 'sonner';
 import {MsgT} from '@/utils/msgTools';
@@ -38,11 +37,11 @@ import {useConsoleStore, LogLevel} from '@/state/useConsole';
 import {useFileStore} from '@/state/useFile';
 
 export default function DeployPanel() {
-  const {chainType} = useRootStore().settings;
+  const chainType = useSettingsStore(state => state.chainType);
   const compiledResultMap = useCompilerStore(state => state.compiledResultMap);
   const [isDeploying, setIsDeploying] = useState(false);
   const [deploymentResult, setDeploymentResult] = useState<string | null>(null);
-  const {setChainType} = useSettingsStore();
+  const setChainType = useSettingsStore(state => state.setChainType);
   const {files, refreshFiles} = useFileStore();
 
   const {
@@ -58,7 +57,7 @@ export default function DeployPanel() {
 
   const {addLog} = useConsoleStore();
 
-  const cFiles = files.filter(file => file.name.endsWith('.c'));
+  const cFiles = files.filter(file => file.name.endsWith('.c') && !file.isDirectory);
 
   const selectedFile = cFiles.find(file => file.id === selectedFileId) ?? null;
 

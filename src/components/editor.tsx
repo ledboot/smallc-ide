@@ -10,20 +10,24 @@ import {useFileStore} from '@/state/useFile';
 
 import {useTabsStore} from '@/state/useTabs';
 import {useDebugStore} from '@/state/useDebugStore';
+import {useShallow} from 'zustand/react/shallow';
 import {toast} from 'sonner';
 
-interface EditorProps {
-  currentLine?: number;
-}
-
-export default function Editor({currentLine}: EditorProps) {
+export default function Editor() {
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<typeof monaco | null>(null);
+  const currentLineDecorationsRef = useRef<string[]>([]);
   const {compiledResultMap, removeCompiledResult} = useCompilerStore();
   const {updateFile} = useFileStore();
   const {currentFile} = useTabsStore();
-  const {toggleBreakpoint} = useDebugStore();
+  const {toggleBreakpoint, currentLine, isDebugging} = useDebugStore(
+    useShallow(state => ({
+      toggleBreakpoint: state.toggleBreakpoint,
+      currentLine: state.currentLine,
+      isDebugging: state.isDebugging,
+    })),
+  );
 
   const getLanguage = (fileName: string, id: string) => {
     if (!currentFile) return 'plaintext';
@@ -171,9 +175,18 @@ export default function Editor({currentLine}: EditorProps) {
     }, 500);
   };
 
-  // Update current line highlighting when currentLine changes
+  // Update current line highlighting when currentLine changes (debug mode)
   useEffect(() => {
-    if (!editorRef.current || currentLine === undefined) return;
+    if (!editorRef.current) return;
+
+    // Clear previous decorations first
+    if (currentLineDecorationsRef.current.length > 0) {
+      editorRef.current.deltaDecorations(currentLineDecorationsRef.current, []);
+      currentLineDecorationsRef.current = [];
+    }
+
+    // If not debugging or no current line, just clear and return
+    if (!isDebugging || currentLine === null) return;
 
     try {
       const model = editorRef.current.getModel();
@@ -188,7 +201,8 @@ export default function Editor({currentLine}: EditorProps) {
       const lineContent = model.getLineContent(validLineNumber) || '';
       const lineLength = Math.max(1, lineContent.length);
 
-      const decorations = editorRef.current.deltaDecorations(
+      // Add new decorations and store their IDs
+      currentLineDecorationsRef.current = editorRef.current.deltaDecorations(
         [],
         [
           {
@@ -200,27 +214,20 @@ export default function Editor({currentLine}: EditorProps) {
             ),
             options: {
               isWholeLine: true,
-              className: 'current-line',
-              glyphMarginClassName: 'current-line-glyph',
+              className: 'debug-current-line',
+              glyphMarginClassName: 'debug-current-line-glyph',
               stickiness: 1 /* NeverGrowsWhenTypingAtEdges */,
             },
           },
         ],
       );
 
-      return () => {
-        if (editorRef.current) {
-          try {
-            editorRef.current.deltaDecorations(decorations, []);
-          } catch (error) {
-            console.error('Error cleaning up current line decorations:', error);
-          }
-        }
-      };
+      // Scroll to the current line
+      editorRef.current.revealLineInCenter(validLineNumber);
     } catch (error) {
       console.error('Error updating current line highlight:', error);
     }
-  }, [currentLine]);
+  }, [currentLine, isDebugging]);
 
   return (
     <div className="h-full w-full">

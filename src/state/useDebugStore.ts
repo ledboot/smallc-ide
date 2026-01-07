@@ -20,6 +20,7 @@ interface DebugState {
   bplist: [number, number][];
   debugInfo: DebugNode[];
   currentDebugFileId: string | null;
+  currentLine: number | null;
 }
 
 interface DebugActions {
@@ -29,6 +30,7 @@ interface DebugActions {
   setBplist: (bplist: [number, number][]) => void;
   setDebugInfo: (debugInfo: DebugNode[]) => void;
   setCurrentDebugFileId: (fileId: string | null) => void;
+  setCurrentLine: (line: number | null) => void;
   loadDebugInfo: (fileName: string) => Promise<void>;
   toggleBreakpoint: (line: number, fileName: string) => boolean;
   mapSourceToVm: (line: number) => number | null;
@@ -42,6 +44,7 @@ export const useDebugStore = create<DebugState & DebugActions>((set, get) => ({
   debugInfo: [],
   isConstructor: false,
   currentDebugFileId: null,
+  currentLine: null,
 
   setIsDebugging: isDebugging => set({isDebugging}),
   setIsPaused: isPaused => set({isPaused}),
@@ -49,6 +52,7 @@ export const useDebugStore = create<DebugState & DebugActions>((set, get) => ({
   setBplist: bplist => set({bplist}),
   setDebugInfo: debugInfo => set({debugInfo}),
   setCurrentDebugFileId: currentDebugFileId => set({currentDebugFileId}),
+  setCurrentLine: currentLine => set({currentLine}),
 
   loadDebugInfo: async (fileName: string) => {
     const baseName = fileName.split('.')[0];

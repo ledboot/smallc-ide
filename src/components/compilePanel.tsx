@@ -24,8 +24,8 @@ import {generateContractTemplate} from '@/utils/templateGenerator';
 import {runContractMethod} from '@/utils/contractRunner';
 import {LogLevel, useConsoleStore} from '@/state/useConsole';
 import {rpcClient} from '@/lib/api';
-import {useRootStore} from '@/state';
 import {useCompilerStore} from '@/state/useCompiler';
+import {useSettingsStore} from '@/state/useSettings';
 import {Input} from './ui/input';
 import {useFileStore} from '@/state/useFile';
 
@@ -41,7 +41,7 @@ export default function CompilePanel({refreshFiles}: CompilePanelProps) {
   const [debugMode, setDebugMode] = useState(false);
 
   const {addLog} = useConsoleStore();
-  const {chainType} = useRootStore().settings;
+  const chainType = useSettingsStore(state => state.chainType);
   const compiledResultMap = useCompilerStore(state => state.compiledResultMap);
   const setCompiledResult = useCompilerStore(state => state.setCompiledResult);
   const [executeMethod, setExecuteMethod] = useState('');

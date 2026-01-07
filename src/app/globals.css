@@ -175,3 +175,32 @@
 .monaco-editor .line-numbers {
   cursor: pointer;
 }
+
+/* Debug Current Line Highlight */
+.monaco-editor .debug-current-line {
+  background-color: rgba(255, 238, 0, 0.3) !important;
+}
+
+.dark .monaco-editor .debug-current-line {
+  background-color: rgba(255, 238, 0, 0.2) !important;
+}
+
+.monaco-editor .debug-current-line-glyph {
+  background: linear-gradient(90deg, #ffc107 0%, #ff9800 100%);
+  border-radius: 2px;
+  margin-left: 4px;
+}
+
+.monaco-editor .debug-current-line-glyph::before {
+  content: '';
+  display: block;
+  position: absolute;
+  width: 0;
+  height: 0;
+  border-left: 8px solid #ffc107;
+  border-top: 6px solid transparent;
+  border-bottom: 6px solid transparent;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
