@@ -33,11 +33,12 @@ import {
   VscDebugRestart,
   VscDebugStop,
   VscDebugContinue,
+  VscLayers,
 } from 'react-icons/vsc';
 
 import {DebugCallType} from '@/constants';
 import {useFileStore} from '@/state/useFile';
-import {useConsoleStore} from '@/state/useConsole';
+import {useConsoleStore, LogLevel} from '@/state/useConsole';
 import {useDebugStore} from '@/state/useDebugStore';
 import type {
   DebugNode,
@@ -48,23 +49,25 @@ import type {
 } from '@/types';
 
 import {useTabsStore} from '@/state/useTabs';
+import {SelectSeparator} from '@radix-ui/react-select';
 
 export default function DebugPanel() {
   const chainType = useSettingsStore(state => state.chainType);
   const handleOpenFile = useTabsStore(state => state.handleOpenFile);
   const {
     isDebugging,
-    isPaused,
     debugSession,
     debugInfo,
     setIsDebugging,
-    setIsPaused,
     setDebugSession,
     loadDebugInfo,
     toggleBreakpoint,
     setCurrentDebugFileId,
     currentDebugFileId,
+    mapVmToSource,
+    setIsContractCall,
     setCurrentLine,
+    isPaused,
   } = useDebugStore(
     useShallow(state => ({
       isDebugging: state.isDebugging,
@@ -72,12 +75,13 @@ export default function DebugPanel() {
       debugSession: state.debugSession,
       debugInfo: state.debugInfo,
       setIsDebugging: state.setIsDebugging,
-      setIsPaused: state.setIsPaused,
       setDebugSession: state.setDebugSession,
       loadDebugInfo: state.loadDebugInfo,
       toggleBreakpoint: state.toggleBreakpoint,
       setCurrentDebugFileId: state.setCurrentDebugFileId,
       currentDebugFileId: state.currentDebugFileId,
+      mapVmToSource: state.mapVmToSource,
+      setIsContractCall: state.setIsContractCall,
       setCurrentLine: state.setCurrentLine,
     })),
   );
@@ -222,16 +226,15 @@ export default function DebugPanel() {
         toast.warning('set breakpoints first to attach debug session');
         return;
       }
-      const attachResult = await rpcClient
-        .getClient(chainType)
-        .debugCall(DebugCallType.attach);
-      console.log('attach result:', attachResult);
+      rpcClient.getClient(chainType).debugCall(DebugCallType.attach);
+
+      await new Promise(resolve => setTimeout(resolve, 500));
+      // console.log('attach result:', attachResult);
 
       // 3. Sync all breakpoints to VM
       const sortedBreakpoints = [...(debugFile.breakpoints || [])].sort(
         (a, b) => a.lineNumber - b.lineNumber,
       );
-
       for (const bp of sortedBreakpoints) {
         const vmOffset = useDebugStore.getState().mapSourceToVm(bp.lineNumber);
         if (vmOffset !== null) {
@@ -244,13 +247,14 @@ export default function DebugPanel() {
               `Failed to sync breakpoint at line ${bp.lineNumber}`,
               e,
             );
+            toast.error(`Failed to sync breakpoint at line ${bp.lineNumber}`);
+            return;
           }
         }
       }
 
       // 4. Enter debug mode and highlight first breakpoint
       setIsDebugging(true);
-      setIsPaused(true);
       setDebugSession({
         sessionId: 'default',
         breakpoints: sortedBreakpoints.map(bp => ({
@@ -259,7 +263,10 @@ export default function DebugPanel() {
         })),
       });
 
-      // Set current line to the first breakpoint
+      // Set current line to the first breakpoint if needed,
+      // but usually the first break is reported by the VM after go?
+      // Actually PHP doesn't set a default line, it waits for flow.
+      // But we can highlight the first one to show we are ready.
       const firstBreakpoint = sortedBreakpoints[0];
       if (firstBreakpoint) {
         setCurrentLine(firstBreakpoint.lineNumber);
@@ -272,39 +279,7 @@ export default function DebugPanel() {
     }
   };
 
-  const restartDebugSession = async () => {
-    if (!debugFile) {
-      toast.error('Please select a file to debug');
-      return;
-    }
-    handleOpenFile(debugFile);
-
-    try {
-      const res = await rpcClient
-        .getClient(chainType)
-        .debugCall(DebugCallType.start);
-
-      if (res && res.result) {
-        toast.success('Debug session restarted');
-
-        const currentSession = useDebugStore.getState().debugSession;
-        setDebugSession({
-          sessionId: 'default',
-          breakpoints: currentSession ? currentSession.breakpoints : [],
-        });
-
-        setIsDebugging(true);
-        setIsPaused(true);
-      } else {
-        toast.error('Failed to restart debug session');
-      }
-    } catch (error) {
-      console.error('Restart failed:', error);
-      toast.error('Failed to restart debug session');
-    }
-  };
-
-  const handleStopDebugging = async () => {
+  const handleTerminateDebugging = async () => {
     try {
       if (debugSession) {
         const [, err] = await rpcClient
@@ -316,93 +291,134 @@ export default function DebugPanel() {
       console.error('Error stopping debug session:', error);
     } finally {
       setIsDebugging(false);
-      setIsPaused(false);
       setDebugSession(null);
       setCurrentLine(null);
     }
   };
 
-  const handleContinue = async () => {
+  const handleDebugAction = async (action: DebugCallType) => {
     if (!debugSession) return;
 
+    // PHP's unhighlight equivalent
+    setCurrentLine(null);
+    addLog(`$ ${action}`);
+
     try {
-      setIsPaused(false);
-      const [result, err] = await rpcClient
-        .getClient(chainType)
-        .debugCall(DebugCallType.continue);
-      if (err) throw new Error(err);
-      updateDebugState(result);
+      const response = await rpcClient.getClient(chainType).debugCall(action);
+      if (response.error) {
+        toast.error(`${action} failed: ${response.error}`);
+        return;
+      }
+
+      const res = response.result;
+      if (!res) {
+        toast.error(`Unexpected response from ${action}`);
+        return;
+      }
+
+      // Log the message from result
+      if (res.result && !res.result.includes('Break at inst')) {
+        addLog(res.result);
+      }
+
+      if (res.result === 'Terminated') {
+        handleTerminateDebugging();
+        return;
+      }
+
+      // Update current line
+      if (res.line !== undefined) {
+        const sourceLine = useDebugStore.getState().mapVmToSource(res.line);
+        if (sourceLine !== null) {
+          setCurrentLine(sourceLine);
+        }
+
+        // Fetch variables
+        for (const code of debugInfo) {
+          if (res.line >= code.begin && res.line <= code.end) {
+            if (code.vars) {
+              for (const varEntry of code.vars) {
+                const varName = Object.keys(varEntry)[0];
+                if (!varName) continue;
+                const varInfo = (varEntry as any)[varName];
+                try {
+                  const dataResp = await rpcClient
+                    .getClient(chainType)
+                    .debugCall(DebugCallType.getdata, [
+                      varInfo.loc,
+                      varInfo.size,
+                    ]);
+                  if (dataResp && dataResp.result !== undefined) {
+                    addLog(`${varName}: ${dataResp.result}`);
+                  }
+                } catch (e) {
+                  console.error(`Failed to fetch variable ${varName}`, e);
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // Fetch stack
+      try {
+        const stackResp = await rpcClient
+          .getClient(chainType)
+          .debugCall(DebugCallType.getstack);
+        if (stackResp && stackResp.result) {
+          const stackLines: string[] = [];
+          for (const addr of stackResp.result) {
+            const codeSegment = debugInfo.find(
+              c => addr >= c.begin && addr <= c.end,
+            );
+            if (codeSegment) {
+              stackLines.push(codeSegment.code);
+            } else {
+              stackLines.push(`Unknown (0x${addr.toString(16)})`);
+            }
+          }
+          addLog('Call Stack:', stackLines.join(' -> '));
+        }
+      } catch (e) {
+        console.error('Failed to fetch stack', e);
+      }
     } catch (error) {
-      console.error('Continue failed:', error);
-      toast.error('Continue failed');
-      setIsPaused(true);
+      console.error(`${action} failed:`, error);
+      toast.error(`${action} failed`);
     }
   };
 
-  const handlePause = async () => {
-    if (!debugSession) return;
+  const handleGo = () => handleDebugAction(DebugCallType.go);
+  const handleStep = () => handleDebugAction(DebugCallType.step);
+  const handleUp = () => handleDebugAction(DebugCallType.up);
 
-    try {
-      const [result, err] = await rpcClient
-        .getClient(chainType)
-        .debugCall(DebugCallType.pause);
-      if (err) throw new Error(err);
-      updateDebugState(result);
-    } catch (error) {
-      console.error('Pause failed:', error);
-      toast.error('Failed to pause execution');
+  const handleGetStack = async () => {
+    if (!debugSession) {
+      toast.error('No active debug session');
+      return;
     }
-  };
-
-  const handleStepOver = async () => {
-    if (!debugSession) return;
-
     try {
-      const [result, err] = await rpcClient
+      const response = await rpcClient
         .getClient(chainType)
-        .debugCall(DebugCallType.stepOver);
-      if (err) throw new Error(err);
-      updateDebugState(result);
+        .debugCall(DebugCallType.getstack);
+
+      if (response && response.error) {
+        addLog('Get Stack Error:', response.error, LogLevel.ERROR);
+      } else {
+        const stackData =
+          response.result !== undefined ? response.result : response;
+        addLog('Debug Stack Info:', stackData);
+      }
+      toast.success('Stack info logged to console');
     } catch (error) {
-      console.error('Step over failed:', error);
-      toast.error('Step over failed');
-    }
-  };
-
-  const handleStepInto = async () => {
-    if (!debugSession) return;
-
-    try {
-      const [result, err] = await rpcClient
-        .getClient(chainType)
-        .debugCall(DebugCallType.stepInto);
-      if (err) throw new Error(err);
-      updateDebugState(result);
-    } catch (error) {
-      console.error('Step into failed:', error);
-      toast.error('Step into failed');
-    }
-  };
-
-  const handleStepOut = async () => {
-    if (!debugSession) return;
-
-    try {
-      const [result, err] = await rpcClient
-        .getClient(chainType)
-        .debugCall(DebugCallType.stepOut);
-      if (err) throw new Error(err);
-      updateDebugState(result);
-    } catch (error) {
-      console.error('Step out failed:', error);
-      toast.error('Step out failed');
+      console.error('Get stack failed:', error);
+      addLog('Get stack failed:', error, LogLevel.ERROR);
+      toast.error('Failed to get stack info');
     }
   };
 
   const updateDebugState = (debugInfo: DebugInfo) => {
     if (debugInfo) {
-      setIsPaused(debugInfo.isPaused || false);
-
       // Update current line in editor if needed
       if (debugInfo.currentLine && debugFile) {
         // You'll need to pass a callback to update the current line in the editor
@@ -484,22 +500,7 @@ export default function DebugPanel() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      onClick={restartDebugSession}
-                      disabled={!isDebugging}
-                      className="h-8 w-8 p-0 rounded-xl text-amber-500 hover:text-amber-600 hover:bg-amber-500/10"
-                    >
-                      <VscDebugRestart className="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Restart</TooltipContent>
-                </Tooltip>
-
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={handleStopDebugging}
+                      onClick={handleTerminateDebugging}
                       disabled={!isDebugging}
                       className="h-8 w-8 p-0 rounded-xl text-destructive hover:text-destructive/80 hover:bg-destructive/10"
                     >
@@ -513,14 +514,14 @@ export default function DebugPanel() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      onClick={handleContinue}
-                      disabled={!isDebugging || !isPaused}
+                      onClick={handleGo}
+                      disabled={!isDebugging}
                       className="h-8 w-8 p-0 rounded-xl text-emerald-600 hover:bg-emerald-500/10 disabled:opacity-20"
                     >
                       <VscDebugContinue className="h-4 w-4" />
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent>Resume</TooltipContent>
+                  <TooltipContent>Go</TooltipContent>
                 </Tooltip>
 
                 <Tooltip>
@@ -528,44 +529,14 @@ export default function DebugPanel() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      onClick={handlePause}
-                      disabled={!isDebugging || isPaused}
+                      onClick={handleStep}
+                      disabled={!isDebugging}
                       className="h-8 w-8 p-0 rounded-xl text-blue-600 hover:bg-blue-500/10 disabled:opacity-20"
-                    >
-                      <VscDebugPause className="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Pause</TooltipContent>
-                </Tooltip>
-
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={handleStepOver}
-                      disabled={!isPaused}
-                      className="h-8 w-8 p-0 rounded-xl text-foreground/70 hover:bg-foreground/5 disabled:opacity-20"
-                    >
-                      <VscDebugStepOver className="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Step Over</TooltipContent>
-                </Tooltip>
-
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={handleStepInto}
-                      disabled={!isPaused}
-                      className="h-8 w-8 p-0 rounded-xl text-foreground/70 hover:bg-foreground/5 disabled:opacity-20"
                     >
                       <VscDebugStepInto className="h-4 w-4" />
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent>Step Into</TooltipContent>
+                  <TooltipContent>Step</TooltipContent>
                 </Tooltip>
 
                 <Tooltip>
@@ -573,14 +544,29 @@ export default function DebugPanel() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      onClick={handleStepOut}
-                      disabled={!isPaused}
+                      onClick={handleUp}
+                      disabled={!isDebugging}
                       className="h-8 w-8 p-0 rounded-xl text-foreground/70 hover:bg-foreground/5 disabled:opacity-20"
                     >
                       <VscDebugStepOut className="h-4 w-4" />
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent>Step Out</TooltipContent>
+                  <TooltipContent>Up</TooltipContent>
+                </Tooltip>
+
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={handleGetStack}
+                      disabled={!isDebugging}
+                      className="h-8 w-8 p-0 rounded-xl text-foreground/70 hover:bg-foreground/5 disabled:opacity-20"
+                    >
+                      <VscLayers className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Get Stack</TooltipContent>
                 </Tooltip>
               </div>
             </TooltipProvider>

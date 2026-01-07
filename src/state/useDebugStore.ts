@@ -21,6 +21,7 @@ interface DebugState {
   debugInfo: DebugNode[];
   currentDebugFileId: string | null;
   currentLine: number | null;
+  isContractCall: boolean;
 }
 
 interface DebugActions {
@@ -34,6 +35,8 @@ interface DebugActions {
   loadDebugInfo: (fileName: string) => Promise<void>;
   toggleBreakpoint: (line: number, fileName: string) => boolean;
   mapSourceToVm: (line: number) => number | null;
+  mapVmToSource: (vmOffset: number) => number | null;
+  setIsContractCall: (isContractCall: boolean) => void;
 }
 
 export const useDebugStore = create<DebugState & DebugActions>((set, get) => ({
@@ -42,7 +45,7 @@ export const useDebugStore = create<DebugState & DebugActions>((set, get) => ({
   debugSession: null,
   bplist: [],
   debugInfo: [],
-  isConstructor: false,
+  isContractCall: false,
   currentDebugFileId: null,
   currentLine: null,
 
@@ -53,6 +56,7 @@ export const useDebugStore = create<DebugState & DebugActions>((set, get) => ({
   setDebugInfo: debugInfo => set({debugInfo}),
   setCurrentDebugFileId: currentDebugFileId => set({currentDebugFileId}),
   setCurrentLine: currentLine => set({currentLine}),
+  setIsContractCall: isContractCall => set({isContractCall}),
 
   loadDebugInfo: async (fileName: string) => {
     const baseName = fileName.split('.')[0];
@@ -82,17 +86,31 @@ export const useDebugStore = create<DebugState & DebugActions>((set, get) => ({
   },
 
   mapSourceToVm: (line: number) => {
-    const {bplist, debugInfo} = get();
+    const {bplist, debugInfo, isContractCall} = get();
     if (!bplist || !debugInfo) return null;
 
-    // Determine offset based on whether we are in constructor
-    const constructorOffset =
-      debugInfo.length > 0 && debugInfo[0]?.body ? debugInfo[0].body : 0;
+    // Determine offset based on whether we are in contract call (body)
+    const offset =
+      isContractCall && debugInfo.length > 0 && debugInfo[0]?.body
+        ? debugInfo[0].body
+        : 0;
 
     for (const [vmOffset, srcLine] of bplist) {
       if (srcLine === line) {
-        return vmOffset + constructorOffset;
+        return vmOffset + offset;
       }
+    }
+    return null;
+  },
+
+  mapVmToSource: (vmOffset: number) => {
+    const {bplist} = get();
+    if (!bplist) return null;
+
+    // PHP logic for linemapping doesn't seem to subtract offset,
+    // so we assume VM returns addresses that match bplist entries.
+    for (const [offset, line] of bplist) {
+      if (offset === vmOffset) return line;
     }
     return null;
   },
@@ -154,7 +172,6 @@ export const useDebugStore = create<DebugState & DebugActions>((set, get) => ({
     );
     setOpenTabs(updatedTabs);
 
-
     const {currentDebugFileId} = get();
     if (isDebugging && currentDebugFileId === fileId) {
       // We can optimistically call RPC for single breakpoint toggle
@@ -181,5 +198,5 @@ export const useDebugStore = create<DebugState & DebugActions>((set, get) => ({
     }
 
     return true;
-  }
+  },
 }));

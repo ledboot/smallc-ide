@@ -60,4 +60,10 @@ export interface DebugNode {
   end: number;
   lines: [number, number][]; // [vmOffset, sourceLine]
   body?: number; // Constructor offset
+  vars?: {
+    [name: string]: {
+      loc: string;
+      size: number;
+    };
+  }[];
 }

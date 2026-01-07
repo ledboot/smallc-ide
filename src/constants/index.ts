@@ -44,14 +44,12 @@ export enum DebugCallType {
   detach = 'detach',
   clearbreakpoint = 'clearbreakpoint',
   breakpoint = 'breakpoint',
-  breakpoints = 'breakpoints',
-  start = 'start',
   stop = 'stop',
-  continue = 'continue',
-  pause = 'pause',
-  stepOver = 'stepOver',
-  stepInto = 'stepInto',
-  stepOut = 'stepOut',
+  go = 'go',
+  step = 'step',
+  up = 'up',
+  getstack = 'getstack',
+  getdata = 'getdata',
 }
 
 export const HOME_CONTENT = `
