@@ -22,6 +22,8 @@ interface DebugState {
   currentDebugFileId: string | null;
   currentLine: number | null;
   isContractCall: boolean;
+  debugVariables: {name: string; value: string; type?: string}[];
+  debugCallStack: {name: string; address: string}[];
 }
 
 interface DebugActions {
@@ -37,6 +39,10 @@ interface DebugActions {
   mapSourceToVm: (line: number) => number | null;
   mapVmToSource: (vmOffset: number) => number | null;
   setIsContractCall: (isContractCall: boolean) => void;
+  setDebugVariables: (
+    variables: {name: string; value: string; type?: string}[],
+  ) => void;
+  setDebugCallStack: (callStack: {name: string; address: string}[]) => void;
 }
 
 export const useDebugStore = create<DebugState & DebugActions>((set, get) => ({
@@ -48,6 +54,8 @@ export const useDebugStore = create<DebugState & DebugActions>((set, get) => ({
   isContractCall: false,
   currentDebugFileId: null,
   currentLine: null,
+  debugVariables: [],
+  debugCallStack: [],
 
   setIsDebugging: isDebugging => set({isDebugging}),
   setIsPaused: isPaused => set({isPaused}),
@@ -57,6 +65,8 @@ export const useDebugStore = create<DebugState & DebugActions>((set, get) => ({
   setCurrentDebugFileId: currentDebugFileId => set({currentDebugFileId}),
   setCurrentLine: currentLine => set({currentLine}),
   setIsContractCall: isContractCall => set({isContractCall}),
+  setDebugVariables: debugVariables => set({debugVariables}),
+  setDebugCallStack: debugCallStack => set({debugCallStack}),
 
   loadDebugInfo: async (fileName: string) => {
     const baseName = fileName.split('.')[0];

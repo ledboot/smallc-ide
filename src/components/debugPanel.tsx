@@ -17,7 +17,6 @@ import {useSettingsStore} from '@/state/useSettings';
 import {rpcClient} from '@/lib/api';
 import {toast} from 'sonner';
 import {runContractMethod} from '@/utils/contractRunner';
-import {PlayIcon} from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
@@ -66,6 +65,8 @@ export default function DebugPanel() {
     currentDebugFileId,
     mapVmToSource,
     setIsContractCall,
+    setDebugVariables,
+    setDebugCallStack,
     setCurrentLine,
     isPaused,
   } = useDebugStore(
@@ -82,6 +83,8 @@ export default function DebugPanel() {
       currentDebugFileId: state.currentDebugFileId,
       mapVmToSource: state.mapVmToSource,
       setIsContractCall: state.setIsContractCall,
+      setDebugVariables: state.setDebugVariables,
+      setDebugCallStack: state.setDebugCallStack,
       setCurrentLine: state.setCurrentLine,
     })),
   );
@@ -154,6 +157,7 @@ export default function DebugPanel() {
   const handleMethodCall = async (
     methodSignature: string,
     tsFilePath: string,
+    apiType: 'sendRawTransaction' | 'tryContract' | 'contractcall',
   ) => {
     if (!tsFilePath) return;
 
@@ -174,39 +178,88 @@ export default function DebugPanel() {
         toast.error('TS execution file not found');
         return;
       }
+
+      // Step 1: Get rawTx from runContractMethod
       const rawTx = await runContractMethod(tsFile.content, methodName);
       if (!rawTx) {
         toast.error('Method execution failed');
         return;
       }
-      const privateKey = process.env.NEXT_PUBLIC_PRIVATE_KEY || '';
-      if (!privateKey) {
-        toast.error('Private key not found in environment variables');
-        return;
-      }
-      // // signrawtransaction
-      // const signedTx = await rpcClient
-      //   .getClient(chainType)
-      //   .signRawTransaction(rawTx, [], [privateKey], false);
-      // if (signedTx.error) {
-      //   toast.error('Sign raw transaction failed');
-      //   return;
-      // }
-      // console.log('sign raw transaction result', signedTx);
 
-      // // sendrawtransaction
-      // const txHash = await rpcClient
-      //   .getClient(chainType)
-      //   .sendRawTransaction(signedTx.result.hex);
-      // if (txHash.error) {
-      //   toast.error('Send raw transaction failed');
-      //   return;
-      // }
-      const txHash = await rpcClient.getClient(chainType).tryContract(rawTx);
-      addLog('TypeScript executed successfully', txHash);
+      // Step 2: Call different API methods based on apiType
+      let result;
+      const client = rpcClient.getClient(chainType);
+
+      switch (apiType) {
+        case 'sendRawTransaction': {
+          const privateKey = process.env.NEXT_PUBLIC_PRIVATE_KEY || '';
+          if (!privateKey) {
+            toast.error('Private key not found in environment variables');
+            return;
+          }
+
+          // Sign the transaction first
+          const signedTx = await client.signRawTransaction(
+            rawTx,
+            [],
+            [privateKey],
+            false,
+          );
+          if (signedTx.error) {
+            toast.error('Sign raw transaction failed');
+            addLog('Sign Error:', signedTx.error, LogLevel.ERROR);
+            return;
+          }
+
+          // Send the signed transaction
+          result = await client.sendRawTransaction(signedTx.result.hex);
+          if (result.error) {
+            toast.error('Send raw transaction failed');
+            addLog('Send Error:', result.error, LogLevel.ERROR);
+            return;
+          }
+          addLog('sendRawTransaction executed successfully', result);
+          toast.success('Transaction sent successfully');
+          break;
+        }
+
+        case 'tryContract': {
+          result = await client.tryContract(rawTx);
+          if (result.error) {
+            toast.error('Try contract failed');
+            addLog('tryContract Error:', result.error, LogLevel.ERROR);
+            return;
+          }
+          addLog('tryContract executed successfully', result);
+          toast.success('Contract tried successfully');
+          break;
+        }
+
+        case 'contractcall': {
+          // For contractcall, we need contract address and params
+          // Extract from the runData or tsFile content
+          // This is a simplified version - you may need to adjust based on your data structure
+          const runData = runDataList.find(rd => rd.tsFile === tsFilePath);
+          if (!runData || !runData.contractAddress) {
+            toast.error('Contract address not found');
+            return;
+          }
+
+          result = await client.contractCall(runData.contractAddress, rawTx);
+          if (result.error) {
+            toast.error('Contract call failed');
+            addLog('contractcall Error:', result.error, LogLevel.ERROR);
+            return;
+          }
+          addLog('contractcall executed successfully', result);
+          toast.success('Contract called successfully');
+          break;
+        }
+      }
     } catch (e) {
       console.error('Method execution failed', e);
       toast.error('Method execution failed');
+      addLog('Execution Error:', e, LogLevel.ERROR);
     }
   };
 
@@ -334,6 +387,7 @@ export default function DebugPanel() {
         }
 
         // Fetch variables
+        const vars: {name: string; value: string; type?: string}[] = [];
         for (const code of debugInfo) {
           if (res.line >= code.begin && res.line <= code.end) {
             if (code.vars) {
@@ -349,6 +403,11 @@ export default function DebugPanel() {
                       varInfo.size,
                     ]);
                   if (dataResp && dataResp.result !== undefined) {
+                    vars.push({
+                      name: varName,
+                      value: String(dataResp.result),
+                      type: varInfo.size > 8 ? 'long' : 'int',
+                    });
                     addLog(`${varName}: ${dataResp.result}`);
                   }
                 } catch (e) {
@@ -358,6 +417,7 @@ export default function DebugPanel() {
             }
           }
         }
+        setDebugVariables(vars);
       }
 
       // Fetch stack
@@ -366,18 +426,25 @@ export default function DebugPanel() {
           .getClient(chainType)
           .debugCall(DebugCallType.getstack);
         if (stackResp && stackResp.result) {
-          const stackLines: string[] = [];
+          const stackFrames: {name: string; address: string}[] = [];
           for (const addr of stackResp.result) {
             const codeSegment = debugInfo.find(
               c => addr >= c.begin && addr <= c.end,
             );
             if (codeSegment) {
-              stackLines.push(codeSegment.code);
+              stackFrames.push({
+                name: codeSegment.code,
+                address: `0x${addr.toString(16)}`,
+              });
             } else {
-              stackLines.push(`Unknown (0x${addr.toString(16)})`);
+              stackFrames.push({
+                name: 'Unknown',
+                address: `0x${addr.toString(16)}`,
+              });
             }
           }
-          addLog('Call Stack:', stackLines.join(' -> '));
+          setDebugCallStack(stackFrames);
+          addLog('Call Stack:', stackFrames.map(f => f.name).join(' -> '));
         }
       } catch (e) {
         console.error('Failed to fetch stack', e);
@@ -417,18 +484,8 @@ export default function DebugPanel() {
     }
   };
 
-  const updateDebugState = (debugInfo: DebugInfo) => {
-    if (debugInfo) {
-      // Update current line in editor if needed
-      if (debugInfo.currentLine && debugFile) {
-        // You'll need to pass a callback to update the current line in the editor
-        // onCurrentLineChange?.(debugInfo.currentLine);
-      }
-    }
-  };
-
   return (
-    <div className="flex h-full flex-col p-4 space-y-10">
+    <div className="flex h-full flex-col p-2 pt-4 space-y-10">
       {/* Integrated Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -439,7 +496,7 @@ export default function DebugPanel() {
         </div>
       </div>
 
-      <div className="flex-1 space-y-10 overflow-y-auto pr-1">
+      <div className="flex-1 space-y-10 pr-1">
         {/* Session Discovery - Flat */}
         <div className="space-y-6">
           <div className="space-y-2">
@@ -579,11 +636,7 @@ export default function DebugPanel() {
             <span className="text-sm font-semibold">Breakpoints</span>
           </div>
 
-          <div className="flex items-center gap-2">
-            {/* Manual input removed as per requirements */}
-          </div>
-
-          <div className="space-y-2">
+          <div className="space-y-2 px-2">
             {(() => {
               // Get breakpoints from the selected file or current debug context
               // Since this panel is often context-specific, maybe we show breakpoints of the `selectedFile` if it matches C file?
@@ -594,7 +647,7 @@ export default function DebugPanel() {
                 breakpoints.map((bp, i) => (
                   <div
                     key={i}
-                    className="flex items-center justify-between p-2 rounded-md bg-muted/40 text-xs"
+                    className="flex items-center justify-between rounded-md bg-muted/40 text-xs"
                   >
                     <div className="flex items-center gap-2">
                       <div className="h-2 w-2 rounded-full bg-red-500" />
@@ -658,14 +711,18 @@ const RunCard = ({
   onMethodCall,
 }: {
   data: any;
-  onMethodCall: (sig: string, file: string) => void;
+  onMethodCall: (
+    sig: string,
+    file: string,
+    apiType: 'sendRawTransaction' | 'tryContract' | 'contractcall',
+  ) => void;
 }) => {
   const [isOpen, setIsOpen] = useState(false);
 
   const truncatedAddress =
     data.contractAddress && data.contractAddress.length > 10
-      ? `${data.contractAddress.slice(0, 6)}...${data.contractAddress.slice(
-          -4,
+      ? `${data.contractAddress.slice(0, 10)}...${data.contractAddress.slice(
+          -8,
         )}`
       : data.contractAddress || 'Unknown';
 
@@ -673,59 +730,140 @@ const RunCard = ({
     ? new Date(data.lastModified).toLocaleString()
     : '';
 
+  const fileName = data.fileName || 'unknown';
+
   return (
-    <Card className="mb-2 overflow-hidden border-muted/40 shadow-sm">
-      <CardHeader
-        className="p-3 cursor-pointer flex flex-row items-center justify-between space-y-0 bg-muted/20 hover:bg-muted/30 transition-colors"
+    <div className="mb-3 p-1 rounded-lg border hover:bg-muted/10 transition-colors">
+      {/* Contract Address */}
+      <div className="flex gap-1 mb-2 items-center">
+        <span className="text-xs uppercase font-semibold">Contract:</span>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="text-xs font-mono text-foreground cursor-default break-all">
+                {truncatedAddress}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>
+              <span className="font-mono text-xs">{data.contractAddress}</span>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      </div>
+
+      {/* Timestamp */}
+      <div className="flex gap-1 mb-2 items-center">
+        <span className="text-xs uppercase font-semibold">Time:</span>
+        <span className="text-xs text-foreground">{dateStr}</span>
+      </div>
+
+      {/* Broadcast File */}
+      <div className="flex gap-1 mb-3 items-center">
+        <span className="text-xs uppercase font-semibold">File:</span>
+        <span className="text-xs font-mono text-foreground break-all">
+          {fileName}
+        </span>
+      </div>
+
+      {/* Methods Toggle */}
+      <button
         onClick={() => setIsOpen(!isOpen)}
+        className="w-full flex items-center justify-between rounded hover:bg-muted/30 transition-colors"
       >
-        <CardTitle className="text-xs font-medium flex items-center justify-between w-full">
-          <div className="flex items-center gap-2">
-            <span className="text-muted-foreground font-normal">Contract:</span>
-            <span className="font-mono text-primary/80">
-              {truncatedAddress}
-            </span>
-          </div>
-          <span className="text-[10px] text-muted-foreground/60 mr-2">
-            {dateStr}
-          </span>
-        </CardTitle>
+        <span className="text-xs font-semibold uppercase">
+          Methods ({Object.keys(data.methodIdentifiers || {}).length})
+        </span>
         {isOpen ? (
-          <ChevronUp className="h-3 w-3 text-muted-foreground" />
+          <ChevronUp className="h-5 w-5 hover:cursor-pointer" />
         ) : (
-          <ChevronDown className="h-3 w-3 text-muted-foreground" />
+          <ChevronDown className="h-5 w-5 hover:cursor-pointer" />
         )}
-      </CardHeader>
+      </button>
+
+      {/* Methods List */}
       {isOpen && (
-        <CardContent className="p-2 space-y-2 bg-background/50">
-          <div className="flex flex-col gap-1">
-            {data.methodIdentifiers &&
-            Object.keys(data.methodIdentifiers).length > 0 ? (
-              Object.keys(data.methodIdentifiers).map(sig => (
-                <Button
-                  key={sig}
-                  variant="ghost"
-                  size="sm"
-                  className="w-full justify-start h-8 text-xs font-mono hover:bg-primary/10 hover:text-primary transition-colors truncate"
-                  onClick={e => {
-                    e.stopPropagation();
-                    onMethodCall(sig, data.tsFile);
-                  }}
-                >
-                  <PlayIcon className="mr-2 h-3 w-3 shrink-0" />
-                  <span className="truncate">
-                    {sig.match(/\s*(\w+)\s*\(/)?.[1] || sig}
-                  </span>
-                </Button>
-              ))
-            ) : (
-              <div className="text-xs text-muted-foreground p-2 text-center">
-                No methods available
+        <div className="mt-2 space-y-1">
+          {data.methodIdentifiers &&
+          Object.keys(data.methodIdentifiers).length > 0 ? (
+            Object.keys(data.methodIdentifiers).map(sig => (
+              <div
+                key={sig}
+                className="flex items-center px-1 gap-2 rounded-md hover:bg-muted/20 transition-colors"
+              >
+                <span className="text-xs font-mono text-foreground/80 flex-1 truncate p-1 bg-orange-100 rounded-xl">
+                  {sig.match(/\s*(\w+)\s*\(/)?.[1] || sig}
+                </span>
+                <div className="flex items-center gap-1">
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 px-2 text-[10px] hover:bg-blue-500/10 hover:text-blue-600 cursor-pointer"
+                          onClick={e => {
+                            e.stopPropagation();
+                            onMethodCall(
+                              sig,
+                              data.tsFile,
+                              'sendRawTransaction',
+                            );
+                          }}
+                        >
+                          Send
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>sendRawTransaction</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 px-2 text-[10px] hover:bg-emerald-500/10 hover:text-emerald-600 cursor-pointer"
+                          onClick={e => {
+                            e.stopPropagation();
+                            onMethodCall(sig, data.tsFile, 'tryContract');
+                          }}
+                        >
+                          Try
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>tryContract</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 px-2 text-[10px] hover:bg-purple-500/10 hover:text-purple-600 cursor-pointer"
+                          onClick={e => {
+                            e.stopPropagation();
+                            onMethodCall(sig, data.tsFile, 'contractcall');
+                          }}
+                        >
+                          Call
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>contractcall</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
               </div>
-            )}
-          </div>
-        </CardContent>
+            ))
+          ) : (
+            <div className="text-xs text-muted-foreground p-2 text-center">
+              No methods available
+            </div>
+          )}
+        </div>
       )}
-    </Card>
+    </div>
   );
 };

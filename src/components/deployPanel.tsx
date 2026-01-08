@@ -329,7 +329,7 @@ export default function DeployPanel() {
         </div>
       </div>
 
-      <div className="flex-1 space-y-10 overflow-y-auto pr-1">
+      <div className="flex-1 space-y-10 pr-1">
         {/* Environment Section - Flat */}
         <div className="space-y-6">
           <div className="space-y-6 px-1">

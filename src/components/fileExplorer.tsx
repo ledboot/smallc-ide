@@ -108,30 +108,16 @@ export default function FileExplorer({onFileDelete}: FileExplorerProps) {
   const [newFileName, setNewFileName] = useState('');
   const [newFolderName, setNewFolderName] = useState('');
   const [renameValue, setRenameValue] = useState('');
-  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(
-    new Set(),
-  );
   const [fileTree, setFileTree] = useState<FileType[]>([]);
   const [contextItem, setContextItem] = useState<FileType | null>(null);
   const [contextParentPath, setContextParentPath] = useState<string>('');
-  const {files, addFile, refreshFiles} = useFileStore();
+  const {files, addFile, refreshFiles, expandedFolders, toggleFolder} =
+    useFileStore();
 
   useEffect(() => {
     const tree = buildTreeFromFiles(files);
     setFileTree(tree);
   }, [files]);
-
-  const toggleFolder = (folderId: string) => {
-    setExpandedFolders(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(folderId)) {
-        newSet.delete(folderId);
-      } else {
-        newSet.add(folderId);
-      }
-      return newSet;
-    });
-  };
 
   const handleCreateFile = async (parentPath?: string) => {
     if (!newFileName) return;

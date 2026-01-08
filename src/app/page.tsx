@@ -26,6 +26,7 @@ import SettingsPanel from '@/components/settingsPanel';
 import CompilePanel from '@/components/compilePanel';
 import {initWasmCompiler} from '@/lib/wasm-compiler';
 import ConsolePanel from '@/components/consolePanel';
+import DebugControlPanel from '@/components/debugControlPanel';
 import EditorTabs from '@/components/editorTabs';
 import {useTabsStore} from '@/state/useTabs';
 import {useFileStore} from '@/state/useFile';
@@ -39,6 +40,8 @@ export default function SmallcIDE() {
     handleOpenFile,
     handleCloseTab,
     handleSwitchTab,
+    cleanupInvalidTabs,
+    restoreTabsFromIds,
   } = useTabsStore();
   const [activeSidebarTab, setActiveSidebarTab] = useState<SidebarTab>('files');
 
@@ -46,6 +49,7 @@ export default function SmallcIDE() {
   const [sidebarWidth, setSidebarWidth] = useState(320);
   const [isConsoleOpen, setIsConsoleOpen] = useState(true);
   const isResizingRef = useRef(false);
+  const hasRestoredTabsRef = useRef(false);
 
   // compile result cache, key is file name
   // compile result cache handled by useCompilerStore now
@@ -59,6 +63,20 @@ export default function SmallcIDE() {
 
     initialize();
   }, [refreshFiles]);
+
+  // Restore tabs only once when files are loaded
+  useEffect(() => {
+    if (files.length > 0 && !hasRestoredTabsRef.current) {
+      hasRestoredTabsRef.current = true;
+
+      // Restore tabs from persisted IDs
+      restoreTabsFromIds(files);
+
+      // Clean up tabs for files that no longer exist
+      const validFileIds = files.map(f => f.id);
+      cleanupInvalidTabs(validFileIds);
+    }
+  }, [files, restoreTabsFromIds, cleanupInvalidTabs]);
 
   // Sidebar resize logic
   useEffect(() => {
@@ -97,7 +115,7 @@ export default function SmallcIDE() {
   const renderSidebarContent = () => {
     switch (activeSidebarTab) {
       case 'files':
-         return (
+        return (
           <FileExplorer
             onFileDelete={file => {
               // If deleted file is currently open, close the tab
@@ -217,10 +235,10 @@ export default function SmallcIDE() {
                       Console
                     </TabsTrigger>
                     <TabsTrigger
-                      value="testing"
-                      className="ml-1 data-[state=active]:bg-secondary rounded-none  h-9 px-4"
+                      value="debug"
+                      className="ml-1 data-[state=active]:bg-secondary rounded-none h-9 px-4"
                     >
-                      Testing
+                      Debug
                     </TabsTrigger>
                   </TabsList>
                   <Button
@@ -235,18 +253,16 @@ export default function SmallcIDE() {
                 </div>
                 <div className="flex-1 overflow-hidden relative">
                   <TabsContent
+                    value="debug"
+                    className="h-full m-0 data-[state=inactive]:hidden"
+                  >
+                    <DebugControlPanel />
+                  </TabsContent>
+                  <TabsContent
                     value="console"
                     className="h-full m-0 data-[state=inactive]:hidden"
                   >
                     <ConsolePanel />
-                  </TabsContent>
-                  <TabsContent
-                    value="testing"
-                    className="h-full m-0 p-4 overflow-auto data-[state=inactive]:hidden"
-                  >
-                    <div className="text-center text-muted-foreground">
-                      Testing functionality will be implemented soon
-                    </div>
                   </TabsContent>
                 </div>
               </Tabs>

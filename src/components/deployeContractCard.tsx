@@ -103,7 +103,7 @@ export const DeployedContractCard = ({
       '6f': '41000000',
       '3f': '41000000',
       '7b': '42000000',
-      c4: '42000000',
+      'c4': '42000000',
       '05': '42000000',
       '78': '43000000',
       '67': '43000000',
@@ -229,7 +229,7 @@ export const DeployedContractCard = ({
                   <button
                     onClick={() => handleMethodClick(method)}
                     className={
-                      'px-3 py-1.5 text-xs cursor-pointer font-mono rounded bg-gray-700 hover:bg-gray-600 text-gray-200'
+                      'px-3 py-1.5 text-xs cursor-pointer font-mono rounded bg-gray-700 hover:bg-gray-600'
                     }
                   >
                     {method.name}
