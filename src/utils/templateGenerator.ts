@@ -62,7 +62,7 @@ export function ${methodName}() { // Parameters from ABI: ${params.join(', ')}
     // --- Developer Implementation ---
     console.log("Generating params for ${methodName}...");
     const methodHex = "${methodHexWithx}";
-    const revMethodHex = hashReverse(methodHex.padStart(8, "0"));   
+    const revMethodHex = rev32(methodHex); 
     // --- End Developer Implementation ---
 }
 `;
