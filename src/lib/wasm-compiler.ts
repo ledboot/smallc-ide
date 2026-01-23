@@ -1,4 +1,4 @@
-import type {FileType} from './types';
+import type {FileType} from '@/types';
 
 interface CompileResult {
   code: number;

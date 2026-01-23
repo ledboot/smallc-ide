@@ -22,8 +22,16 @@ interface DebugState {
   currentDebugFileId: string | null;
   currentLine: number | null;
   isContractCall: boolean;
-  debugVariables: {name: string; value: string; type?: string}[];
+  debugVariables: {name: string; value: any; type?: string}[];
   debugCallStack: {name: string; address: string}[];
+  // Preparsed variable metadata (structure info without actual values)
+  preparsedVariables: {
+    name: string;
+    type: string;
+    loc: string;
+    size: number;
+    structure?: any; // For struct types, contains field definitions
+  }[];
 }
 
 interface DebugActions {
@@ -40,9 +48,19 @@ interface DebugActions {
   mapVmToSource: (vmOffset: number) => number | null;
   setIsContractCall: (isContractCall: boolean) => void;
   setDebugVariables: (
-    variables: {name: string; value: string; type?: string}[],
+    variables: {name: string; value: any; type?: string; size?: number}[],
   ) => void;
   setDebugCallStack: (callStack: {name: string; address: string}[]) => void;
+  setPreparsedVariables: (
+    variables: {
+      name: string;
+      type: string;
+      loc: string;
+      size: number;
+      structure?: any;
+    }[],
+  ) => void;
+  preparseVariablesForMethod: (vmLine: number) => void;
 }
 
 export const useDebugStore = create<DebugState & DebugActions>((set, get) => ({
@@ -56,6 +74,7 @@ export const useDebugStore = create<DebugState & DebugActions>((set, get) => ({
   currentLine: null,
   debugVariables: [],
   debugCallStack: [],
+  preparsedVariables: [],
 
   setIsDebugging: isDebugging => set({isDebugging}),
   setIsPaused: isPaused => set({isPaused}),
@@ -67,6 +86,62 @@ export const useDebugStore = create<DebugState & DebugActions>((set, get) => ({
   setIsContractCall: isContractCall => set({isContractCall}),
   setDebugVariables: debugVariables => set({debugVariables}),
   setDebugCallStack: debugCallStack => set({debugCallStack}),
+  setPreparsedVariables: preparsedVariables => set({preparsedVariables}),
+
+  // Preparse variables for a given VM line (method)
+  preparseVariablesForMethod: (vmLine: number) => {
+    const {debugInfo} = get();
+    const preparsed: {
+      name: string;
+      type: string;
+      loc: string;
+      size: number;
+      structure?: any;
+    }[] = [];
+
+    // Find the code segment containing this VM line
+    for (const code of debugInfo) {
+      if (vmLine >= code.begin && vmLine <= code.end) {
+        if (code.vars) {
+          for (const varEntry of code.vars) {
+            const varName = Object.keys(varEntry)[0];
+            if (!varName) continue;
+            const varInfo = (varEntry as any)[varName];
+
+            // Extract variable metadata
+            const varMeta = {
+              name: varName,
+              type: varInfo.type || '',
+              loc: varInfo.loc || '',
+              size: varInfo.size || 0,
+              structure: undefined as any,
+            };
+
+            // If it's a struct type, resolve its structure
+            if (
+              varInfo.type &&
+              varInfo.type.startsWith('__') &&
+              varInfo.type.endsWith('__')
+            ) {
+              // Find the type definition
+              for (const codeNode of debugInfo) {
+                if (codeNode.types && codeNode.types[varInfo.type]) {
+                  varMeta.structure = codeNode.types[varInfo.type];
+                  break;
+                }
+              }
+            }
+
+            preparsed.push(varMeta);
+          }
+        }
+        break;
+      }
+    }
+
+    set({preparsedVariables: preparsed});
+    console.log('Preparsed variables:', preparsed);
+  },
 
   loadDebugInfo: async (fileName: string) => {
     const baseName = fileName.split('.')[0];

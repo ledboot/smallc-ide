@@ -5,6 +5,7 @@ export type ChainInfo = {
   iconLabel: string;
   chainId: number;
   endpoints: string[];
+  wsEndpoints: string[];
   icon: string;
   unit: string;
   networkType: NetworkType;
@@ -60,10 +61,17 @@ export interface DebugNode {
   end: number;
   lines: [number, number][]; // [vmOffset, sourceLine]
   body?: number; // Constructor offset
+  types?: {
+    [typeName: string]: {
+      __TYPE__: string;
+      [fieldName: string]: any;
+    };
+  };
   vars?: {
     [name: string]: {
       loc: string;
       size: number;
+      type?: string;
     };
   }[];
 }

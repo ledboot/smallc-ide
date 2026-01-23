@@ -38,14 +38,11 @@ self.onmessage = function (e) {
       // 3. Write files
       files.forEach(file => {
         const path = `${file.name}`;
-        console.log('Writing file:', path);
         self.Module.FS.writeFile(path, file.content);
       });
 
       // 4. Compile
-      // console.log('Worker running:', args);
       const ret = self.Module.callMain(args);
-      console.log('compile result', ret);
 
       // 5. Capture output files (.asm, .abi)
       // We assume the compiler generates files in /workspace
@@ -54,7 +51,6 @@ self.onmessage = function (e) {
       const allFiles = self.Module.FS.readdir('/');
 
       for (const filename of allFiles) {
-        console.log('read file->', filename);
         if (filename.endsWith('.asm') || filename.endsWith('.abi')) {
           const content = self.Module.FS.readFile(filename, {
             encoding: 'utf8',
@@ -108,10 +104,8 @@ self.rmrf = function (path) {
         continue;
       const fullPath = '/' + file;
       if (self.Module.FS.isDir(self.Module.FS.stat(fullPath).mode)) {
-        console.log('rmrf Removing directory:', fullPath);
         self.rmrf(fullPath);
       } else {
-        console.log('Removing file:', fullPath);
         self.Module.FS.unlink(fullPath);
       }
     }

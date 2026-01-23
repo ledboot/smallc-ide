@@ -12,7 +12,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card';
 import {useSettingsStore} from '@/state/useSettings';
 import {rpcClient} from '@/lib/api';
 import {toast} from 'sonner';
@@ -35,20 +34,183 @@ import {
   VscLayers,
 } from 'react-icons/vsc';
 
-import {DebugCallType} from '@/constants';
+import {DebugCallType, ChainType} from '@/constants';
 import {useFileStore} from '@/state/useFile';
 import {useConsoleStore, LogLevel} from '@/state/useConsole';
 import {useDebugStore} from '@/state/useDebugStore';
-import type {
-  DebugNode,
-  Breakpoint,
-  DebugInfo,
-  Variable,
-  FileType,
-} from '@/types';
 
 import {useTabsStore} from '@/state/useTabs';
-import {SelectSeparator} from '@radix-ui/react-select';
+
+// Helper function to reverse hex string for little-endian conversion
+const reverseHexString = (hexStr: string): string => {
+  // Remove '0x' prefix if present
+  const cleanHex = hexStr.startsWith('0x') ? hexStr.slice(2) : hexStr;
+  // Reverse by pairs (bytes)
+  const reversed =
+    cleanHex
+      .match(/.{1,2}/g)
+      ?.reverse()
+      .join('') || cleanHex;
+  return reversed;
+};
+
+// Helper function to convert hex to appropriate type
+const processBasicType = (hexValue: string, varType: string): string => {
+  // If no type specified but we have data, it might be a raw buffer or hash
+  if (!varType) return hexValue;
+
+  try {
+    const reversed = reverseHexString(hexValue);
+
+    // Handle numeric types
+    const numericTypes = [
+      'int',
+      'uint',
+      'long',
+      'ulong',
+      'char',
+      'uchar',
+      'short',
+      'ushort',
+    ];
+    if (numericTypes.includes(varType.toLowerCase())) {
+      // Use BigInt for large 64-bit numbers (long)
+      return BigInt('0x' + reversed).toString();
+    }
+  } catch (e) {
+    console.warn(`Failed to process numeric type ${varType}`, e);
+  }
+
+  return hexValue;
+};
+
+// Helper function to process struct type variables
+// Returns an object where each field has both type and value
+const processStructType = async (
+  hexValue: string,
+  typeName: string,
+  debugInfo: any[],
+  chainType: ChainType,
+  isRawData = false,
+  varSize: number,
+): Promise<{[key: string]: {type: string; value: any}}> => {
+  const result: {[key: string]: {type: string; value: any}} = {};
+
+  // Find the type definition in debugInfo
+  let typeDefinition: any = null;
+  for (const code of debugInfo) {
+    if (code.types && code.types[typeName]) {
+      typeDefinition = code.types[typeName];
+      break;
+    }
+  }
+
+  if (!typeDefinition || typeDefinition.__TYPE__ !== 'struct') {
+    return {
+      error: {
+        type: 'error',
+        value: `Type ${typeName} not found or not a struct`,
+      },
+    };
+  }
+
+  let fullStructData = '';
+
+  if (isRawData) {
+    fullStructData = hexValue;
+  } else {
+    // Call RPC evaluate with (hexValue, varSize)
+    // Use hexValue directly as requested
+    const evaluateResp = await rpcClient
+      .getClient(chainType)
+      .debugCall(DebugCallType.evaluate, [hexValue, varSize]);
+
+    if (evaluateResp && evaluateResp.result !== undefined) {
+      fullStructData = String(evaluateResp.result);
+    } else {
+      return {
+        error: {type: 'error', value: `Evaluate failed for ${typeName}`},
+      };
+    }
+  }
+
+  // 3. Process each field from fullStructData
+  for (const [fieldName, fieldInfo] of Object.entries(typeDefinition)) {
+    if (fieldName === '__TYPE__') continue;
+
+    const field = fieldInfo as any;
+    const fieldType = field.type;
+    const fieldSize = field.size;
+    const fieldLoc = field.loc;
+
+    try {
+      // Extract field data from the full struct hex string
+      // Each byte is 2 hex characters
+      const start = fieldLoc * 2;
+      const end = (fieldLoc + fieldSize) * 2;
+      const fieldValue = fullStructData.substring(start, end);
+
+      if (fieldType.startsWith('*')) {
+        // Pointer type - return as-is with type info
+        result[fieldName] = {type: fieldType, value: fieldValue};
+      } else if (fieldType.startsWith('__') && fieldType.endsWith('__')) {
+        // Custom struct type - recursively process using extracted data
+        const nestedStruct = await processStructType(
+          fieldValue,
+          fieldType,
+          debugInfo,
+          chainType,
+          true,
+          fieldSize,
+        );
+        result[fieldName] = {type: fieldType, value: nestedStruct};
+      } else {
+        // Basic type - process the extracted hex
+        result[fieldName] = {
+          type: fieldType,
+          value: processBasicType(fieldValue, fieldType),
+        };
+      }
+    } catch (e) {
+      console.error(`Failed to process field ${fieldName}`, e);
+      result[fieldName] = {type: fieldType || 'unknown', value: 'Error'};
+    }
+  }
+
+  return result;
+};
+
+// Main function to process variable value based on type
+const processVariableValue = async (
+  hexValue: string,
+  varType: string,
+  debugInfo: any[],
+  chainType: ChainType,
+  varSize: number,
+): Promise<any> => {
+  // 1. Check if it's a pointer type
+  if (varType.startsWith('*')) {
+    // Pointer type - return as-is
+    return hexValue;
+  }
+
+  // 2. Check if it's a custom struct type
+  if (varType.startsWith('__') && varType.endsWith('__')) {
+    // Custom struct type - need to expand
+    const structData = await processStructType(
+      hexValue,
+      varType,
+      debugInfo,
+      chainType,
+      false,
+      varSize,
+    );
+    return structData;
+  }
+
+  // 3. Basic type - reverse and convert
+  return processBasicType(hexValue, varType);
+};
 
 export default function DebugPanel() {
   const chainType = useSettingsStore(state => state.chainType);
@@ -68,6 +230,7 @@ export default function DebugPanel() {
     setDebugVariables,
     setDebugCallStack,
     setCurrentLine,
+    setPreparsedVariables,
     isPaused,
   } = useDebugStore(
     useShallow(state => ({
@@ -86,6 +249,7 @@ export default function DebugPanel() {
       setDebugVariables: state.setDebugVariables,
       setDebugCallStack: state.setDebugCallStack,
       setCurrentLine: state.setCurrentLine,
+      setPreparsedVariables: state.setPreparsedVariables,
     })),
   );
 
@@ -306,7 +470,7 @@ export default function DebugPanel() {
         }
       }
 
-      // 4. Enter debug mode and highlight first breakpoint
+      // // 4. Enter debug mode and highlight first breakpoint
       setIsDebugging(true);
       setDebugSession({
         sessionId: 'default',
@@ -316,16 +480,9 @@ export default function DebugPanel() {
         })),
       });
 
-      // Set current line to the first breakpoint if needed,
-      // but usually the first break is reported by the VM after go?
-      // Actually PHP doesn't set a default line, it waits for flow.
-      // But we can highlight the first one to show we are ready.
-      const firstBreakpoint = sortedBreakpoints[0];
-      if (firstBreakpoint) {
-        setCurrentLine(firstBreakpoint.lineNumber);
-      }
-
-      toast.success('Debug session attached');
+      toast.success(
+        'Debug session attached, waiting for transaction to be debugged',
+      );
     } catch (error) {
       console.error('Attach failed:', error);
       toast.error('Failed to attach debug session');
@@ -346,15 +503,16 @@ export default function DebugPanel() {
       setIsDebugging(false);
       setDebugSession(null);
       setCurrentLine(null);
+      setDebugVariables([]);
+      setPreparsedVariables([]);
     }
   };
 
   const handleDebugAction = async (action: DebugCallType) => {
     if (!debugSession) return;
 
-    // PHP's unhighlight equivalent
     setCurrentLine(null);
-    addLog(`$ ${action}`);
+    addLog(`debug action: ${action}`);
 
     try {
       const response = await rpcClient.getClient(chainType).debugCall(action);
@@ -381,13 +539,21 @@ export default function DebugPanel() {
 
       // Update current line
       if (res.line !== undefined) {
+        // Pre-parse variable metadata immediately
+        useDebugStore.getState().preparseVariablesForMethod(res.line);
+
         const sourceLine = useDebugStore.getState().mapVmToSource(res.line);
         if (sourceLine !== null) {
           setCurrentLine(sourceLine);
         }
 
         // Fetch variables
-        const vars: {name: string; value: string; type?: string}[] = [];
+        const vars: {
+          name: string;
+          value: string;
+          type?: string;
+          size?: number;
+        }[] = [];
         for (const code of debugInfo) {
           if (res.line >= code.begin && res.line <= code.end) {
             if (code.vars) {
@@ -403,12 +569,27 @@ export default function DebugPanel() {
                       varInfo.size,
                     ]);
                   if (dataResp && dataResp.result !== undefined) {
+                    addLog(`${varName}: ${dataResp.result}`);
+                    const rawValue = String(dataResp.result);
+                    const varType = varInfo.type || '';
+                    const varSize = varInfo.size || 0;
+
+                    // Process the value based on type
+                    const processedValue = await processVariableValue(
+                      rawValue,
+                      varType,
+                      debugInfo,
+                      chainType,
+                      varSize,
+                    );
+
                     vars.push({
                       name: varName,
-                      value: String(dataResp.result),
-                      type: varInfo.size > 8 ? 'long' : 'int',
+                      value: processedValue,
+                      type: varType,
+                      size: varSize,
                     });
-                    addLog(`${varName}: ${dataResp.result}`);
+                    addLog(`${varName} (${varType}): ${processedValue}`);
                   }
                 } catch (e) {
                   console.error(`Failed to fetch variable ${varName}`, e);

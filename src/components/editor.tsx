@@ -21,13 +21,15 @@ export default function Editor() {
   const {compiledResultMap, removeCompiledResult} = useCompilerStore();
   const {updateFile} = useFileStore();
   const {currentFile} = useTabsStore();
-  const {toggleBreakpoint, currentLine, isDebugging} = useDebugStore(
-    useShallow(state => ({
-      toggleBreakpoint: state.toggleBreakpoint,
-      currentLine: state.currentLine,
-      isDebugging: state.isDebugging,
-    })),
-  );
+  const {toggleBreakpoint, currentLine, isDebugging, currentDebugFileId} =
+    useDebugStore(
+      useShallow(state => ({
+        toggleBreakpoint: state.toggleBreakpoint,
+        currentLine: state.currentLine,
+        isDebugging: state.isDebugging,
+        currentDebugFileId: state.currentDebugFileId,
+      })),
+    );
 
   const getLanguage = (fileName: string, id: string) => {
     if (!currentFile) return 'plaintext';
@@ -122,6 +124,64 @@ export default function Editor() {
     // Initial breakpoints render
     updateBreakpoints(editor, currentFile?.breakpoints || []);
 
+    // Listen for model changes (tab switches) to re-apply debug decorations
+    editor.onDidChangeModel(() => {
+      // Clear old decoration refs as they're no longer valid
+      currentLineDecorationsRef.current = [];
+
+      // Re-apply debug line highlight if debugging
+      const {isDebugging, currentLine, currentDebugFileId} =
+        useDebugStore.getState();
+      const {currentFile: tabFile} = useTabsStore.getState();
+
+      // Only apply highlight if we're debugging and switched back to the debug file
+      if (
+        isDebugging &&
+        currentLine !== null &&
+        tabFile &&
+        tabFile.id === currentDebugFileId
+      ) {
+        const model = editor.getModel();
+        if (model) {
+          try {
+            const lineCount = model.getLineCount();
+            const validLineNumber = Math.max(
+              1,
+              Math.min(currentLine, lineCount),
+            );
+            if (validLineNumber <= lineCount) {
+              const lineContent = model.getLineContent(validLineNumber) || '';
+              const lineLength = Math.max(1, lineContent.length);
+              currentLineDecorationsRef.current = editor.deltaDecorations(
+                [],
+                [
+                  {
+                    range: new monaco.Range(
+                      validLineNumber,
+                      1,
+                      validLineNumber,
+                      lineLength,
+                    ),
+                    options: {
+                      isWholeLine: true,
+                      className: 'debug-current-line',
+                      glyphMarginClassName: 'debug-current-line-glyph',
+                      stickiness: 1,
+                    },
+                  },
+                ],
+              );
+            }
+          } catch (error) {
+            console.error(
+              'Error re-applying debug highlight on model change:',
+              error,
+            );
+          }
+        }
+      }
+    });
+
     // Handle gutter clicks for breakpoints
     editor.onMouseDown(async e => {
       if (
@@ -176,58 +236,79 @@ export default function Editor() {
   };
 
   // Update current line highlighting when currentLine changes (debug mode)
+  // Also re-apply when switching tabs (currentFile changes) to restore highlight
   useEffect(() => {
     if (!editorRef.current) return;
 
-    // Clear previous decorations first
-    if (currentLineDecorationsRef.current.length > 0) {
-      editorRef.current.deltaDecorations(currentLineDecorationsRef.current, []);
-      currentLineDecorationsRef.current = [];
-    }
+    // Helper function to apply debug highlight
+    const applyDebugHighlight = () => {
+      if (!editorRef.current) return;
 
-    // If not debugging or no current line, just clear and return
-    if (!isDebugging || currentLine === null) return;
+      // Clear previous decorations first
+      if (currentLineDecorationsRef.current.length > 0) {
+        try {
+          editorRef.current.deltaDecorations(
+            currentLineDecorationsRef.current,
+            [],
+          );
+        } catch {
+          // Decorations might be invalid if model changed, ignore
+        }
+        currentLineDecorationsRef.current = [];
+      }
 
-    try {
-      const model = editorRef.current.getModel();
-      if (!model) return;
+      // If not debugging or no current line, just clear and return
+      if (!isDebugging || currentLine === null) return;
 
-      const lineCount = model.getLineCount();
+      // Only apply highlight if current file is the debug file
+      if (currentFile?.id !== currentDebugFileId) return;
 
-      // Ensure currentLine is within valid range
-      const validLineNumber = Math.max(1, Math.min(currentLine, lineCount));
-      if (validLineNumber > lineCount) return;
+      try {
+        const model = editorRef.current.getModel();
+        if (!model) return;
 
-      const lineContent = model.getLineContent(validLineNumber) || '';
-      const lineLength = Math.max(1, lineContent.length);
+        const lineCount = model.getLineCount();
 
-      // Add new decorations and store their IDs
-      currentLineDecorationsRef.current = editorRef.current.deltaDecorations(
-        [],
-        [
-          {
-            range: new monaco.Range(
-              validLineNumber,
-              1,
-              validLineNumber,
-              lineLength,
-            ),
-            options: {
-              isWholeLine: true,
-              className: 'debug-current-line',
-              glyphMarginClassName: 'debug-current-line-glyph',
-              stickiness: 1 /* NeverGrowsWhenTypingAtEdges */,
+        // Ensure currentLine is within valid range
+        const validLineNumber = Math.max(1, Math.min(currentLine, lineCount));
+        if (validLineNumber > lineCount) return;
+
+        const lineContent = model.getLineContent(validLineNumber) || '';
+        const lineLength = Math.max(1, lineContent.length);
+
+        // Add new decorations and store their IDs
+        currentLineDecorationsRef.current = editorRef.current.deltaDecorations(
+          [],
+          [
+            {
+              range: new monaco.Range(
+                validLineNumber,
+                1,
+                validLineNumber,
+                lineLength,
+              ),
+              options: {
+                isWholeLine: true,
+                className: 'debug-current-line',
+                glyphMarginClassName: 'debug-current-line-glyph',
+                stickiness: 1 /* NeverGrowsWhenTypingAtEdges */,
+              },
             },
-          },
-        ],
-      );
+          ],
+        );
 
-      // Scroll to the current line
-      editorRef.current.revealLineInCenter(validLineNumber);
-    } catch (error) {
-      console.error('Error updating current line highlight:', error);
-    }
-  }, [currentLine, isDebugging]);
+        // Scroll to the current line
+        editorRef.current.revealLineInCenter(validLineNumber);
+      } catch (error) {
+        console.error('Error updating current line highlight:', error);
+      }
+    };
+
+    // Use setTimeout to ensure model is fully loaded after tab switch
+    const timeoutId = setTimeout(applyDebugHighlight, 50);
+
+    return () => clearTimeout(timeoutId);
+  }, [currentLine, isDebugging, currentFile?.id, currentDebugFileId]);
 
   return (
     <div className="h-full w-full">

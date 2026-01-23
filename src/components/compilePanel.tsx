@@ -21,19 +21,12 @@ import {toast} from 'sonner';
 import {Asm} from '@/lib/asm';
 
 import {generateContractTemplate} from '@/utils/templateGenerator';
-import {runContractMethod} from '@/utils/contractRunner';
 import {LogLevel, useConsoleStore} from '@/state/useConsole';
-import {rpcClient} from '@/lib/api';
 import {useCompilerStore} from '@/state/useCompiler';
 import {useSettingsStore} from '@/state/useSettings';
-import {Input} from './ui/input';
 import {useFileStore} from '@/state/useFile';
 
-interface CompilePanelProps {
-  refreshFiles?: () => Promise<void>;
-}
-
-export default function CompilePanel({refreshFiles}: CompilePanelProps) {
+export default function CompilePanel() {
   const [selectedFile, setSelectedFile] = useState<string>('');
   const [isCompiling, setIsCompiling] = useState(false);
 
@@ -44,14 +37,11 @@ export default function CompilePanel({refreshFiles}: CompilePanelProps) {
   const chainType = useSettingsStore(state => state.chainType);
   const compiledResultMap = useCompilerStore(state => state.compiledResultMap);
   const setCompiledResult = useCompilerStore(state => state.setCompiledResult);
-  const [executeMethod, setExecuteMethod] = useState('');
-  const files = useFileStore(state => state.files);
+  const {files, refreshFiles} = useFileStore();
 
   // Filter out .c and .ts files
   const sourceFiles = files.filter(
-    file =>
-      (file.name.endsWith('.c') || file.name.endsWith('.ts')) &&
-      !file.isDirectory,
+    file => file.name.endsWith('.c') && !file.isDirectory,
   );
   // Automatically select first file
   useEffect(() => {
@@ -85,47 +75,6 @@ export default function CompilePanel({refreshFiles}: CompilePanelProps) {
     }
 
     setIsCompiling(true);
-
-    // Handle TypeScript files separately
-    if (file.name.endsWith('.ts')) {
-      try {
-        const rawTx = await runContractMethod(file.content, executeMethod);
-        if (!rawTx) {
-          return;
-        }
-        console.log('rawTx', rawTx);
-        const privateKey = process.env.NEXT_PUBLIC_PRIVATE_KEY || '';
-        if (!privateKey) {
-          toast.error('Private key not found in environment variables');
-          return;
-        }
-        // signrawtransaction
-        const signedTx = await rpcClient
-          .getClient(chainType)
-          .signRawTransaction(rawTx, [], [privateKey], false);
-        if (!signedTx.hex) {
-          toast.error('Sign raw transaction failed');
-          return;
-        }
-        console.log('sign raw transaction result', signedTx);
-
-        // sendrawtransaction
-        const txHash = await rpcClient
-          .getClient(chainType)
-          .sendRawTransaction(signedTx.hex);
-        if (!txHash) {
-          toast.error('Send raw transaction failed');
-          return;
-        }
-        addLog('TypeScript executed successfully');
-      } catch (e) {
-        addLog('Execution failed');
-        toast.error('Execution failed');
-      } finally {
-        setIsCompiling(false);
-      }
-      return;
-    }
 
     try {
       // 构建编译参数
@@ -169,12 +118,6 @@ export default function CompilePanel({refreshFiles}: CompilePanelProps) {
 
         // 处理输出文件
         await processOutputFiles(file, result.outputFiles);
-
-        // 刷新文件列表
-        if (refreshFiles) {
-          await refreshFiles();
-        }
-        // generateTemplate(file.name);
       } else {
         toast.error('Compilation failed for ' + file.name);
         addLog('Compilation failed for ' + file.name, result, LogLevel.ERROR);
@@ -191,68 +134,6 @@ export default function CompilePanel({refreshFiles}: CompilePanelProps) {
     }
   };
 
-  const generateTemplate = async (sourceFileName: string) => {
-    try {
-      const baseName = sourceFileName.split('.').slice(0, -1).join('.');
-      const abiFileName = `/${baseName}.abi`;
-      const abiFile = await getFile(abiFileName);
-      console.log('abiFile', abiFile);
-      if (!abiFile) {
-        toast.error('ABI file not found');
-        return;
-      }
-      // Parse ABI to create the template
-
-      // Generate template JS
-      const templateCode = generateContractTemplate(
-        JSON.parse(abiFile.content),
-      );
-
-      // Ensure .build directory exists
-      const buildDir = '/.build';
-      try {
-        await createFolder(buildDir);
-      } catch (e) {
-        // Directory might already exist, ignore
-      }
-
-      // Save to .build directory
-      const timestamp = Math.floor(Date.now() / 1000).toString();
-      const timestampFilename = `${baseName}_${timestamp}.ts`;
-      const latestFilename = `${baseName}_latest.ts`;
-
-      const timestampFile: FileType = {
-        id: `${buildDir}/${timestampFilename}`,
-        name: timestampFilename,
-        content: templateCode,
-        path: `${buildDir}/${timestampFilename}`,
-        isDirectory: false,
-        lastModified: new Date().toISOString(),
-      };
-
-      const latestFile: FileType = {
-        id: `${buildDir}/${latestFilename}`,
-        name: latestFilename,
-        content: templateCode,
-        path: `${buildDir}/${latestFilename}`,
-        isDirectory: false,
-        lastModified: new Date().toISOString(),
-      };
-
-      await saveFile(timestampFile);
-      await saveFile(latestFile);
-
-      toast.success('Template generated', {
-        description: `Saved to .build/${latestFilename}`,
-      });
-    } catch (error) {
-      console.error('Failed to generate template:', error);
-      toast.error('Failed to generate template', {
-        description: error instanceof Error ? error.message : 'Unknown error',
-      });
-    }
-  };
-
   const processOutputFiles = async (
     sourceFile: FileType,
     outputFiles: {name: string; content: string}[],
@@ -264,7 +145,6 @@ export default function CompilePanel({refreshFiles}: CompilePanelProps) {
 
     if (asmFile && abiFile) {
       const asm = Asm.assemble(asmFile.content);
-      console.log('asm', asm);
 
       if (asm.success) {
         const abiContent = JSON.parse(abiFile.content);
@@ -299,6 +179,7 @@ export default function CompilePanel({refreshFiles}: CompilePanelProps) {
         content: abiFile.content,
         lastModified: new Date().toISOString(),
       });
+      await refreshFiles();
     }
   };
 
@@ -380,20 +261,6 @@ export default function CompilePanel({refreshFiles}: CompilePanelProps) {
                     className="scale-90"
                   />
                 </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="method-input" className="text-xs font-medium">
-                    Entry Point Method
-                  </Label>
-                  <Input
-                    id="method-input"
-                    type="text"
-                    value={executeMethod}
-                    onChange={e => setExecuteMethod(e.target.value)}
-                    placeholder="e.g. main"
-                    className="h-12 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
-                  />
-                </div>
               </div>
             </div>
           ) : (
@@ -415,7 +282,7 @@ export default function CompilePanel({refreshFiles}: CompilePanelProps) {
           <Button
             onClick={handleCompile}
             disabled={isCompiling || !selectedFile || sourceFiles.length === 0}
-            className="w-[220px] h-14 text-sm font-black uppercase tracking-widest bg-primary text-primary-foreground transition-all hover:scale-[1.01] active:scale-[0.98] shadow-lg shadow-primary/20"
+            className="w-55 h-14 text-sm font-black uppercase tracking-widest bg-primary text-primary-foreground transition-all hover:scale-[1.01] active:scale-[0.98] shadow-lg shadow-primary/20"
           >
             {isCompiling ? (
               <>

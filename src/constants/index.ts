@@ -20,6 +20,7 @@ export const CHAIN_INFO: {[key in ChainType]: ChainInfo} = {
     iconLabel: 'ZENT',
     chainId: 0x1,
     endpoints: ['http://omegasuite.org:7789'],
+    wsEndpoints: ['ws://omegasuite.org:7789/ws'],
     icon: './images/artifacts/bitcoin-mainnet.svg',
     unit: 'ZENT',
     rpcUser: '',
@@ -31,6 +32,7 @@ export const CHAIN_INFO: {[key in ChainType]: ChainInfo} = {
     iconLabel: 'ZENT',
     chainId: 0x1,
     endpoints: ['http://localhost:7700'],
+    wsEndpoints: ['ws://localhost:7700/ws'],
     icon: './images/artifacts/bitcoin-mainnet.svg',
     unit: 'ZENT',
     rpcUser: '',
@@ -50,6 +52,7 @@ export enum DebugCallType {
   up = 'up',
   getstack = 'getstack',
   getdata = 'getdata',
+  evaluate = 'evaluate'
 }
 
 export const HOME_CONTENT = `
