@@ -23,20 +23,20 @@ export const CHAIN_INFO: {[key in ChainType]: ChainInfo} = {
     wsEndpoints: ['ws://omegasuite.org:7789/ws'],
     icon: './images/artifacts/bitcoin-mainnet.svg',
     unit: 'ZENT',
-    rpcUser: '',
-    rpcPassword: '',
+    rpcUser: 'admin',
+    rpcPassword: 'FFh5rL',
     networkType: NetworkType.TESTNET,
   },
   [ChainType.ZENT_LOCAL]: {
     label: 'ZENT Local',
     iconLabel: 'ZENT',
     chainId: 0x1,
-    endpoints: ['http://localhost:7700'],
-    wsEndpoints: ['ws://localhost:7700/ws'],
+    endpoints: ['http://127.0.0.1:7700'],
+    wsEndpoints: ['ws://127.0.0.1:7700/ws'],
     icon: './images/artifacts/bitcoin-mainnet.svg',
     unit: 'ZENT',
-    rpcUser: '',
-    rpcPassword: '',
+    rpcUser: 'admin',
+    rpcPassword: 'FFh5rL',
     networkType: NetworkType.TESTNET,
   },
 };
@@ -52,7 +52,7 @@ export enum DebugCallType {
   up = 'up',
   getstack = 'getstack',
   getdata = 'getdata',
-  evaluate = 'evaluate'
+  evaluate = 'evaluate',
 }
 
 export const HOME_CONTENT = `

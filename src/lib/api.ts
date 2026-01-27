@@ -7,7 +7,7 @@ const clientInstances: Record<ChainType, RPCClient> = {} as Record<
   RPCClient
 >;
 
-class RPCClient {
+export class RPCClient {
   private readonly client: AxiosInstance;
   private sessionId: number;
   public readonly chainId: number;

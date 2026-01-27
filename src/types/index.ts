@@ -71,7 +71,7 @@ export interface DebugNode {
     [name: string]: {
       loc: string;
       size: number;
-      type?: string;
+      type: string;
     };
   }[];
 }

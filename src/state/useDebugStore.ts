@@ -1,12 +1,19 @@
 import {create} from 'zustand';
 import type {DebugNode} from '@/types';
-import {rpcClient} from '@/lib/api';
+import {rpcClient, RPCClient} from '@/lib/api';
 import {DebugCallType} from '@/constants';
 import {useSettingsStore} from './useSettings';
 import {getFile} from '@/lib/db';
 import {toast} from 'sonner';
 import {useFileStore} from './useFile';
 import {useTabsStore} from './useTabs';
+import {
+  getDebugWSClient,
+  disconnectDebugWSClient,
+  type DebugWebSocketClient,
+} from '@/lib/debugWebSocket';
+import {processVariableValue} from '@/lib/debugUtils';
+import {useConsoleStore, LogLevel} from './useConsole';
 
 interface DebugSession {
   sessionId: string;
@@ -32,6 +39,9 @@ interface DebugState {
     size: number;
     structure?: any; // For struct types, contains field definitions
   }[];
+  // WebSocket connection state
+  wsClient: DebugWebSocketClient | null;
+  wsConnected: boolean;
 }
 
 interface DebugActions {
@@ -61,6 +71,12 @@ interface DebugActions {
     }[],
   ) => void;
   preparseVariablesForMethod: (vmLine: number) => void;
+  // WebSocket connection management
+  connectDebugWS: () => Promise<void>;
+  disconnectDebugWS: () => void;
+  finishDebug: () => void;
+  getDebugClient: () => DebugWebSocketClient | RPCClient;
+  fetchDebugState: (vmLine: number) => Promise<void>;
 }
 
 export const useDebugStore = create<DebugState & DebugActions>((set, get) => ({
@@ -75,6 +91,8 @@ export const useDebugStore = create<DebugState & DebugActions>((set, get) => ({
   debugVariables: [],
   debugCallStack: [],
   preparsedVariables: [],
+  wsClient: null,
+  wsConnected: false,
 
   setIsDebugging: isDebugging => set({isDebugging}),
   setIsPaused: isPaused => set({isPaused}),
@@ -88,6 +106,74 @@ export const useDebugStore = create<DebugState & DebugActions>((set, get) => ({
   setDebugCallStack: debugCallStack => set({debugCallStack}),
   setPreparsedVariables: preparsedVariables => set({preparsedVariables}),
 
+  // WebSocket connection management
+  connectDebugWS: async () => {
+    const {chainType} = useSettingsStore.getState();
+    const wsClient = getDebugWSClient(chainType);
+    try {
+      await wsClient.connect();
+
+      // Setup event listeners
+      wsClient.onDebugEvent((event: any) => {
+        const {isDebugging, fetchDebugState, finishDebug} = get();
+        if (!isDebugging) return;
+
+        console.log('[DebugStore] Received VM event:', event);
+
+        const vmLine = event?.Line ?? event?.line;
+        const result = event?.Result ?? event?.result;
+
+        if (result === 'Terminated') {
+          // VM Terminated
+          finishDebug();
+        } else if (vmLine !== undefined) {
+          // VM Breaked
+          fetchDebugState(vmLine);
+        } else if (typeof event === 'string' && event.startsWith('C')) {
+          // New contract event
+          console.log('[DebugStore] Debugging contract:', event);
+          toast.info(`Debugging contract: ${event.substring(2)}`);
+        }
+      });
+
+      set({wsClient, wsConnected: true});
+    } catch (error) {
+      console.error('Failed to connect debug WebSocket:', error);
+      set({wsClient: null, wsConnected: false});
+      throw error;
+    }
+  },
+
+  disconnectDebugWS: () => {
+    const {chainType} = useSettingsStore.getState();
+    disconnectDebugWSClient(chainType);
+    set({wsClient: null, wsConnected: false});
+  },
+
+  finishDebug: () => {
+    const {disconnectDebugWS, setIsDebugging} = get();
+    set({
+      isDebugging: false,
+      isPaused: false,
+      currentLine: null,
+      debugSession: null,
+      debugVariables: [],
+      debugCallStack: [],
+      preparsedVariables: [],
+    });
+    disconnectDebugWS();
+    setIsDebugging(false);
+  },
+
+  getDebugClient: () => {
+    const {wsClient, wsConnected} = get();
+    if (wsClient && wsConnected && wsClient.isReady()) {
+      return wsClient;
+    }
+    const {chainType} = useSettingsStore.getState();
+    return rpcClient.getClient(chainType);
+  },
+
   // Preparse variables for a given VM line (method)
   preparseVariablesForMethod: (vmLine: number) => {
     const {debugInfo} = get();
@@ -99,9 +185,13 @@ export const useDebugStore = create<DebugState & DebugActions>((set, get) => ({
       structure?: any;
     }[] = [];
 
+    console.log('Preparsing variables for VM line:', vmLine, debugInfo);
+
     // Find the code segment containing this VM line
     for (const code of debugInfo) {
-      if (vmLine >= code.begin && vmLine <= code.end) {
+      console.log('Checking code segment:', code);
+      if (code.code != "" && vmLine >= code.begin && vmLine <= code.end) {
+        console.log('Found code segment:', code);
         if (code.vars) {
           for (const varEntry of code.vars) {
             const varName = Object.keys(varEntry)[0];
@@ -140,7 +230,6 @@ export const useDebugStore = create<DebugState & DebugActions>((set, get) => ({
     }
 
     set({preparsedVariables: preparsed});
-    console.log('Preparsed variables:', preparsed);
   },
 
   loadDebugInfo: async (fileName: string) => {
@@ -150,6 +239,7 @@ export const useDebugStore = create<DebugState & DebugActions>((set, get) => ({
       const file = await getFile(dbgPath);
       if (file) {
         const content = JSON.parse(file.content) as DebugNode[];
+        console.log('Loaded debug info:', content);
         set({debugInfo: content});
 
         // Flatten bplist
@@ -160,7 +250,7 @@ export const useDebugStore = create<DebugState & DebugActions>((set, get) => ({
           });
         });
         set({bplist: list});
-        console.log('Loaded debug info:', list);
+        console.log('Loaded debug bplist:', list);
       } else {
         set({debugInfo: [], bplist: []});
       }
@@ -267,21 +357,120 @@ export const useDebugStore = create<DebugState & DebugActions>((set, get) => ({
       // Wait, mapSourceToVm uses `bplist`.
 
       // Single call logic:
+      const debugClient = get().getDebugClient();
       if (exists) {
-        const {chainType} = useSettingsStore.getState();
-        rpcClient
-          .getClient(chainType)
-          .debugCall(DebugCallType.clearbreakpoint, [vmOffset])
+        debugClient
+          .debugCall(DebugCallType.clearbreakpoint, ['', vmOffset])
           .catch(e => console.error(e));
       } else {
-        const {chainType} = useSettingsStore.getState();
-        rpcClient
-          .getClient(chainType)
-          .debugCall(DebugCallType.breakpoint, [vmOffset])
+        debugClient
+          .debugCall(DebugCallType.breakpoint, ['', vmOffset])
           .catch(e => console.error(e));
       }
     }
 
     return true;
+  },
+
+  fetchDebugState: async (vmLine: number) => {
+    const {
+      getDebugClient,
+      debugInfo,
+      mapVmToSource,
+      preparseVariablesForMethod,
+      setDebugVariables,
+      setDebugCallStack,
+    } = get();
+    const debugClient = getDebugClient();
+    const {chainType} = useSettingsStore.getState();
+    const {addLog} = useConsoleStore.getState();
+
+    try {
+      // 1. Update line and pause status
+      const sourceLine = mapVmToSource(vmLine);
+      set({isPaused: true, currentLine: sourceLine});
+
+      // 2. Pre-parse variable metadata immediately
+      preparseVariablesForMethod(vmLine);
+      const preparsed = get().preparsedVariables;
+      console.log('Preparsed variables:', preparsed);
+
+      // 3. Fetch variables
+      const vars: {
+        name: string;
+        value: any;
+        type?: string;
+        size?: number;
+      }[] = [];
+
+      for (const varInfo of preparsed) {
+        try {
+          const dataResp = await debugClient.debugCall(DebugCallType.getdata, [
+            varInfo.loc,
+            varInfo.size,
+          ]);
+          if (dataResp && dataResp.result !== undefined) {
+            const rawValue = String(dataResp.result);
+            const varType = varInfo.type || '';
+            const varSize = varInfo.size || 0;
+
+            const processedValue = await processVariableValue(
+              rawValue,
+              varType,
+              debugInfo,
+              chainType,
+              debugClient,
+              varSize,
+              varInfo.structure,
+            );
+
+            vars.push({
+              name: varInfo.name,
+              value: processedValue,
+              type: varType,
+              size: varSize,
+            });
+          }
+        } catch (e) {
+          console.error(`Failed to fetch variable ${varInfo.name}`, e);
+        }
+      }
+      setDebugVariables(vars);
+
+      // 4. Fetch stack
+      try {
+        const stackResp = await debugClient.debugCall(DebugCallType.getstack);
+        if (stackResp && stackResp.result) {
+          const stackFrames: {name: string; address: string}[] = [];
+          for (const addr of stackResp.result) {
+            const codeSegment = debugInfo.find(
+              c => addr >= c.begin && addr <= c.end,
+            );
+            if (codeSegment) {
+              stackFrames.push({
+                name: codeSegment.code,
+                address: `0x${addr.toString(16)}`,
+              });
+            } else {
+              stackFrames.push({
+                name: 'Unknown',
+                address: `0x${addr.toString(16)}`,
+              });
+            }
+          }
+          setDebugCallStack(stackFrames);
+        }
+      } catch (e) {
+        console.error('Failed to fetch stack', e);
+      }
+
+      addLog(
+        `Paused at VM line ${vmLine} (Source: ${sourceLine})`,
+        vars,
+        LogLevel.INFO,
+      );
+    } catch (err) {
+      console.error('Error fetching debug state:', err);
+    }
   },
 }));
