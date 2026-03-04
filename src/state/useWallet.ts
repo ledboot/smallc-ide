@@ -1,0 +1,131 @@
+'use client';
+
+import {create} from 'zustand';
+import type {ZentNetwork, ZentUtxo} from '@/types/zent';
+
+interface WalletState {
+  /** true when window.zent is present (extension is installed) */
+  isExtensionAvailable: boolean;
+  isConnected: boolean;
+  accounts: string[];
+  currentAccount: string | null;
+  network: ZentNetwork | null;
+
+  /** Check presence of window.zent and sync state */
+  init(): Promise<void>;
+  /** Request accounts — opens extension popup */
+  connect(): Promise<void>;
+  /** Disconnect from the current site */
+  disconnect(): Promise<void>;
+  /** Fetch UTXOs for the current account */
+  getUtxos(address?: string): Promise<ZentUtxo[]>;
+  /**
+   * Sign a raw tx hex via wallet.
+   * Returns the signed transaction hex string.
+   */
+  signTransaction(rawTxHex: string): Promise<string>;
+  /**
+   * Broadcast a signed tx hex via wallet.
+   * Returns the tx hash string.
+   */
+  sendTransaction(signedHex: string): Promise<string>;
+}
+
+export const useWalletStore = create<WalletState>((set, get) => ({
+  isExtensionAvailable: false,
+  isConnected: false,
+  accounts: [],
+  currentAccount: null,
+  network: null,
+
+  init: async () => {
+    // Extension injects window.zent on document_start; poll briefly if not yet ready
+    let zent = window.zent;
+    if (!zent) {
+      await new Promise<void>(resolve => {
+        window.addEventListener('zent#initialized', () => resolve(), {
+          once: true,
+        });
+        setTimeout(resolve, 1500); // give up after 1.5 s
+      });
+      zent = window.zent;
+    }
+
+    if (!zent) {
+      set({isExtensionAvailable: false});
+      return;
+    }
+
+    set({isExtensionAvailable: true});
+
+    // Register event listeners
+    zent.on('accountsChanged', (accounts: string[]) => {
+      set({
+        accounts,
+        currentAccount: accounts[0] ?? null,
+        isConnected: accounts.length > 0,
+      });
+    });
+
+    zent.on('networkChanged', async () => {
+      const network = await window.zent?.getNetwork().catch(() => null);
+      set({network: network ?? null});
+    });
+
+    // Sync current state (non-blocking — extension may not be unlocked yet)
+    try {
+      const [accounts, network] = await Promise.all([
+        zent.getAccounts(),
+        zent.getNetwork(),
+      ]);
+      set({
+        accounts,
+        currentAccount: accounts[0] ?? null,
+        isConnected: accounts.length > 0,
+        network,
+      });
+    } catch {
+      // wallet locked or not yet approved — that's fine
+    }
+  },
+
+  connect: async () => {
+    const zent = window.zent;
+    if (!zent) throw new Error('Zent wallet extension not found');
+    const accounts = await zent.requestAccounts();
+    const network = await zent.getNetwork().catch(() => null);
+    set({
+      accounts,
+      currentAccount: accounts[0] ?? null,
+      isConnected: accounts.length > 0,
+      network: network ?? null,
+    });
+  },
+
+  disconnect: async () => {
+    await window.zent?.disconnect().catch(() => undefined);
+    set({isConnected: false, accounts: [], currentAccount: null});
+  },
+
+  getUtxos: async (address?: string) => {
+    const zent = window.zent;
+    if (!zent) throw new Error('Zent wallet extension not found');
+    const addr = address ?? get().currentAccount;
+    if (!addr) throw new Error('No account connected');
+    return zent.getUtxos(addr);
+  },
+
+  signTransaction: async (rawTxHex: string) => {
+    const zent = window.zent;
+    if (!zent) throw new Error('Zent wallet extension not found');
+    const result = await zent.signTransaction(rawTxHex);
+    return result.signedTransaction;
+  },
+
+  sendTransaction: async (signedHex: string) => {
+    const zent = window.zent;
+    if (!zent) throw new Error('Zent wallet extension not found');
+    const result = await zent.sendTransaction(signedHex);
+    return result.txHash;
+  },
+}));

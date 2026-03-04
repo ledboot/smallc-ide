@@ -1,28 +1,40 @@
-"use client"
+'use client';
 
-import { useState } from "react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Switch } from "@/components/ui/switch"
-import { Separator } from "@/components/ui/separator"
-import { SettingsIcon, PaletteIcon, CodeIcon, SaveIcon } from "lucide-react"
+import {useState} from 'react';
+import {Button} from '@/components/ui/button';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import {Input} from '@/components/ui/input';
+import {Label} from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {Switch} from '@/components/ui/switch';
+import {Separator} from '@/components/ui/separator';
+import {SettingsIcon, PaletteIcon, CodeIcon, SaveIcon} from 'lucide-react';
 
 export default function SettingsPanel() {
-  const [theme, setTheme] = useState("dark")
-  const [fontSize, setFontSize] = useState("14")
-  const [tabSize, setTabSize] = useState("2")
-  const [wordWrap, setWordWrap] = useState(true)
-  const [minimap, setMinimap] = useState(false)
-  const [autoSave, setAutoSave] = useState(true)
-  const [autoSaveDelay, setAutoSaveDelay] = useState("1000")
+  const [theme, setTheme] = useState('dark');
+  const [fontSize, setFontSize] = useState('14');
+  const [tabSize, setTabSize] = useState('2');
+  const [wordWrap, setWordWrap] = useState(true);
+  const [minimap, setMinimap] = useState(false);
+  const [autoSave, setAutoSave] = useState(true);
+  const [autoSaveDelay, setAutoSaveDelay] = useState('1000');
 
   const handleSaveSettings = () => {
     // In a real implementation, save to localStorage or backend
-    console.log("Settings saved")
-  }
+    console.log('Settings saved');
+  };
 
   return (
     <div className="flex h-full flex-col p-4 space-y-4">
@@ -103,7 +115,9 @@ export default function SettingsPanel() {
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
                 <Label>Word Wrap</Label>
-                <div className="text-sm text-muted-foreground">Wrap long lines</div>
+                <div className="text-sm text-muted-foreground">
+                  Wrap long lines
+                </div>
               </div>
               <Switch checked={wordWrap} onCheckedChange={setWordWrap} />
             </div>
@@ -111,7 +125,9 @@ export default function SettingsPanel() {
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
                 <Label>Minimap</Label>
-                <div className="text-sm text-muted-foreground">Show code minimap</div>
+                <div className="text-sm text-muted-foreground">
+                  Show code minimap
+                </div>
               </div>
               <Switch checked={minimap} onCheckedChange={setMinimap} />
             </div>
@@ -131,7 +147,9 @@ export default function SettingsPanel() {
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
               <Label>Enable Auto Save</Label>
-              <div className="text-sm text-muted-foreground">Automatically save files after changes</div>
+              <div className="text-sm text-muted-foreground">
+                Automatically save files after changes
+              </div>
             </div>
             <Switch checked={autoSave} onCheckedChange={setAutoSave} />
           </div>
@@ -142,7 +160,7 @@ export default function SettingsPanel() {
               <Input
                 id="autoSaveDelay"
                 value={autoSaveDelay}
-                onChange={(e) => setAutoSaveDelay(e.target.value)}
+                onChange={e => setAutoSaveDelay(e.target.value)}
                 placeholder="1000"
               />
             </div>
@@ -155,5 +173,5 @@ export default function SettingsPanel() {
         Save Settings
       </Button>
     </div>
-  )
+  );
 }

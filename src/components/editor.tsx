@@ -1,63 +1,370 @@
-"use client"
+'use client';
 
-import { useRef } from "react"
-import type { FileType } from "@/lib/types"
-import { saveFile } from "@/lib/db"
-import { Editor as MonacoEditor } from "@monaco-editor/react"
+import {useEffect, useRef} from 'react';
+import type {Breakpoint} from '@/types';
+import {saveFile} from '@/lib/db';
+import {Editor as MonacoEditor} from '@monaco-editor/react';
+import {useCompilerStore} from '@/state/useCompiler';
+import * as monaco from 'monaco-editor';
+import {useFileStore} from '@/state/useFile';
 
-interface EditorProps {
-  file: FileType
-  updateFile: (content: string) => void
-}
+import {useTabsStore} from '@/state/useTabs';
+import {useDebugStore} from '@/state/useDebugStore';
+import {useShallow} from 'zustand/react/shallow';
+import {toast} from 'sonner';
 
-export default function Editor({ file, updateFile }: EditorProps) {
-  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+export default function Editor() {
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
+  const monacoRef = useRef<typeof monaco | null>(null);
+  const currentLineDecorationsRef = useRef<string[]>([]);
+  const {compiledResultMap, removeCompiledResult} = useCompilerStore();
+  const {updateFile} = useFileStore();
+  const {currentFile} = useTabsStore();
+  const {toggleBreakpoint, currentLine, isDebugging, currentDebugFileId} =
+    useDebugStore(
+      useShallow(state => ({
+        toggleBreakpoint: state.toggleBreakpoint,
+        currentLine: state.currentLine,
+        isDebugging: state.isDebugging,
+        currentDebugFileId: state.currentDebugFileId,
+      })),
+    );
 
+  const getLanguage = (fileName: string, id: string) => {
+    if (!currentFile) return 'plaintext';
+    if (id === 'home') return 'plaintext';
+    if (fileName.endsWith('.sol')) return 'sol';
+    if (fileName.endsWith('.c')) return 'c';
+    if (
+      fileName.endsWith('.cpp') ||
+      fileName.endsWith('.cc') ||
+      fileName.endsWith('.cxx')
+    )
+      return 'cpp';
+    if (fileName.endsWith('.h') || fileName.endsWith('.hpp')) return 'cpp';
+    if (fileName.endsWith('.js')) return 'javascript';
+    if (fileName.endsWith('.json')) return 'json';
+    if (fileName.endsWith('.ts')) return 'typescript';
+    return 'plaintext';
+  };
+
+  const updateBreakpoints = (
+    editor: monaco.editor.IStandaloneCodeEditor,
+    breakpoints: Breakpoint[],
+  ) => {
+    const model = editor.getModel();
+    if (!model) return;
+
+    // Clear existing first
+    const oldDecorations = model
+      .getAllDecorations()
+      .filter(d =>
+        d.options.glyphMarginClassName?.includes('breakpoint-glyph'),
+      );
+    editor.deltaDecorations(
+      oldDecorations.map(d => d.id),
+      [],
+    );
+
+    const decorations = breakpoints.map(bp => ({
+      range: new monaco.Range(bp.lineNumber, 1, bp.lineNumber, 1),
+      options: {
+        isWholeLine: false,
+        glyphMarginClassName: `breakpoint-glyph ${
+          bp.enabled === false ? 'breakpoint-disabled' : ''
+        }`,
+        stickiness: 1 /* NeverGrowsWhenTypingAtEdges */,
+      },
+    }));
+
+    if (decorations.length > 0) {
+      editor.deltaDecorations([], decorations);
+    }
+  };
+
+  // Sync breakpoints effect
+  useEffect(() => {
+    if (!editorRef.current || !currentFile) return;
+    updateBreakpoints(editorRef.current, currentFile.breakpoints || []);
+  }, [currentFile?.breakpoints, currentFile?.name]);
+
+  const handleEditorDidMount = (
+    editor: monaco.editor.IStandaloneCodeEditor,
+    monacoInstance: typeof monaco,
+  ) => {
+    editorRef.current = editor;
+    monacoRef.current = monacoInstance;
+
+    // Set global instance for runner access
+    import('@/lib/monaco-instance').then(({setMonacoInstance}) => {
+      setMonacoInstance(monacoInstance, editor);
+    });
+
+    // Add extra libs for external modules
+    monacoInstance.languages.typescript.typescriptDefaults.addExtraLib(
+      `
+      declare module "@noble/hashes/sha2.js" {
+        export function sha256(msg: Uint8Array | string): Uint8Array;
+      }
+      declare module "@noble/hashes/sha2" {
+        export function sha256(msg: Uint8Array | string): Uint8Array;
+      }
+       declare module "@noble/hashes/sha256" {
+        export function sha256(msg: Uint8Array | string): Uint8Array;
+      }
+      declare module "big-integer" {
+        function bigInt(value: any): any;
+        export = bigInt;
+      }
+      `,
+      'file:///node_modules/@types/external-libs/index.d.ts',
+    );
+
+    // Initial breakpoints render
+    updateBreakpoints(editor, currentFile?.breakpoints || []);
+
+    // Listen for model changes (tab switches) to re-apply debug decorations
+    editor.onDidChangeModel(() => {
+      // Clear old decoration refs as they're no longer valid
+      currentLineDecorationsRef.current = [];
+
+      // Re-apply debug line highlight if debugging
+      const {isDebugging, currentLine, currentDebugFileId} =
+        useDebugStore.getState();
+      const {currentFile: tabFile} = useTabsStore.getState();
+
+      // Only apply highlight if we're debugging and switched back to the debug file
+      if (
+        isDebugging &&
+        currentLine !== null &&
+        tabFile &&
+        tabFile.id === currentDebugFileId
+      ) {
+        const model = editor.getModel();
+        if (model) {
+          try {
+            const lineCount = model.getLineCount();
+            const validLineNumber = Math.max(
+              1,
+              Math.min(currentLine, lineCount),
+            );
+            if (validLineNumber <= lineCount) {
+              const lineContent = model.getLineContent(validLineNumber) || '';
+              const lineLength = Math.max(1, lineContent.length);
+              currentLineDecorationsRef.current = editor.deltaDecorations(
+                [],
+                [
+                  {
+                    range: new monaco.Range(
+                      validLineNumber,
+                      1,
+                      validLineNumber,
+                      lineLength,
+                    ),
+                    options: {
+                      isWholeLine: true,
+                      className: 'debug-current-line',
+                      glyphMarginClassName: 'debug-current-line-glyph',
+                      stickiness: 1,
+                    },
+                  },
+                ],
+              );
+            }
+          } catch (error) {
+            console.error(
+              'Error re-applying debug highlight on model change:',
+              error,
+            );
+          }
+        }
+      }
+    });
+
+    // Handle gutter clicks for breakpoints
+    editor.onMouseDown(async e => {
+      if (
+        !e.target ||
+        (e.target.type !== monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN &&
+          e.target.type !== monaco.editor.MouseTargetType.GUTTER_LINE_NUMBERS)
+      ) {
+        return;
+      }
+
+      if (!editorRef.current) return;
+      const {currentFile} = useTabsStore.getState();
+      const model = editorRef.current.getModel();
+      if (!model) return;
+      // Check validation for C files
+      if (!currentFile) return;
+      if (!currentFile?.name.endsWith('.c')) return;
+
+      const lineNumber = e.target.position?.lineNumber;
+      if (!lineNumber || lineNumber < 1 || lineNumber > model.getLineCount())
+        return;
+
+      const success = toggleBreakpoint(lineNumber, currentFile.id);
+      if (!success) {
+        toast.error(`Cannot set breakpoint at line ${lineNumber}`);
+        return;
+      }
+    });
+  };
+
+  // Handle editor content changes
   const handleEditorChange = (value: string | undefined) => {
-    if (value === undefined) return
-
-    updateFile(value)
+    if (value === undefined) return;
+    if (!currentFile) return;
+    if (currentFile.id === 'home') return;
+    currentFile.content = value;
+    currentFile.lastModified = new Date().toISOString();
+    updateFile(currentFile);
 
     // Debounce save operation
     if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current)
+      clearTimeout(saveTimeoutRef.current);
     }
 
     saveTimeoutRef.current = setTimeout(() => {
-      saveFile({
-        ...file,
-        content: value,
-        lastModified: new Date().toISOString(),
-      })
-    }, 1000)
-  }
+      saveFile(currentFile);
 
-  const getLanguage = (fileName: string) => {
-    if (fileName.endsWith(".sol")) return "sol"
-    if (fileName.endsWith(".c")) return "c"
-    if (fileName.endsWith(".cpp") || fileName.endsWith(".cc") || fileName.endsWith(".cxx")) return "cpp"
-    if (fileName.endsWith(".h") || fileName.endsWith(".hpp")) return "cpp"
-    if (fileName.endsWith(".js")) return "javascript"
-    if (fileName.endsWith(".json")) return "json"
-    return "plaintext"
-  }
+      if (compiledResultMap.has(currentFile.name)) {
+        removeCompiledResult(currentFile.name);
+      }
+    }, 500);
+  };
+
+  // Update current line highlighting when currentLine changes (debug mode)
+  // Also re-apply when switching tabs (currentFile changes) to restore highlight
+  useEffect(() => {
+    if (!editorRef.current) return;
+
+    // Helper function to apply debug highlight
+    const applyDebugHighlight = () => {
+      if (!editorRef.current) return;
+
+      // Clear previous decorations first
+      if (currentLineDecorationsRef.current.length > 0) {
+        try {
+          editorRef.current.deltaDecorations(
+            currentLineDecorationsRef.current,
+            [],
+          );
+        } catch {
+          // Decorations might be invalid if model changed, ignore
+        }
+        currentLineDecorationsRef.current = [];
+      }
+
+      // If not debugging or no current line, just clear and return
+      if (!isDebugging || currentLine === null) return;
+
+      // Only apply highlight if current file is the debug file
+      if (currentFile?.id !== currentDebugFileId) return;
+
+      try {
+        const model = editorRef.current.getModel();
+        if (!model) return;
+
+        const lineCount = model.getLineCount();
+
+        // Ensure currentLine is within valid range
+        const validLineNumber = Math.max(1, Math.min(currentLine, lineCount));
+        if (validLineNumber > lineCount) return;
+
+        const lineContent = model.getLineContent(validLineNumber) || '';
+        const lineLength = Math.max(1, lineContent.length);
+
+        // Add new decorations and store their IDs
+        currentLineDecorationsRef.current = editorRef.current.deltaDecorations(
+          [],
+          [
+            {
+              range: new monaco.Range(
+                validLineNumber,
+                1,
+                validLineNumber,
+                lineLength,
+              ),
+              options: {
+                isWholeLine: true,
+                className: 'debug-current-line',
+                glyphMarginClassName: 'debug-current-line-glyph',
+                stickiness: 1 /* NeverGrowsWhenTypingAtEdges */,
+              },
+            },
+          ],
+        );
+
+        // Scroll to the current line
+        editorRef.current.revealLineInCenter(validLineNumber);
+      } catch (error) {
+        console.error('Error updating current line highlight:', error);
+      }
+    };
+
+    // Use setTimeout to ensure model is fully loaded after tab switch
+    const timeoutId = setTimeout(applyDebugHighlight, 50);
+
+    return () => clearTimeout(timeoutId);
+  }, [currentLine, isDebugging, currentFile?.id, currentDebugFileId]);
 
   return (
     <div className="h-full w-full">
       <MonacoEditor
         height="100%"
-        language={getLanguage(file.name)}
-        value={file.content}
+        path={currentFile?.id}
+        language={getLanguage(currentFile?.name || '', currentFile?.id || '')}
+        value={currentFile?.content}
         onChange={handleEditorChange}
-        theme="vs-dark"
+        onMount={handleEditorDidMount}
+        theme="github-light"
         options={{
-          minimap: { enabled: false },
+          readOnly: currentFile?.id === 'home',
+          // Disable syntax checking for home tab
+          quickSuggestions: currentFile?.id !== 'home',
+          suggestOnTriggerCharacters: currentFile?.id !== 'home',
+          parameterHints: {enabled: currentFile?.id !== 'home'},
+          codeLens: currentFile?.id !== 'home',
+          lightbulb: {enabled: currentFile?.id !== 'home'},
+          minimap: {
+            enabled: true,
+            side: 'right',
+            size: 'proportional',
+            showSlider: 'mouseover',
+            renderCharacters: true,
+            maxColumn: 120,
+            scale: 1,
+          },
           fontSize: 14,
-          wordWrap: "on",
+          wordWrap: 'on',
           automaticLayout: true,
           tabSize: 2,
+          glyphMargin: currentFile?.id !== 'home',
+          lineNumbersMinChars: 3,
+          folding: true,
+          lineDecorationsWidth: 10,
+          lineNumbers: currentFile?.id === 'home' ? 'off' : 'on',
+          contextmenu: true,
+          scrollBeyondLastLine: false,
+          renderLineHighlight: 'line',
+          renderWhitespace: 'selection',
+          guides: {indentation: true},
+          overviewRulerLanes: 3,
+          overviewRulerBorder: true,
+          scrollbar: {
+            vertical: 'auto',
+            horizontal: 'auto',
+            useShadows: true,
+            verticalHasArrows: false,
+            horizontalHasArrows: false,
+            verticalScrollbarSize: 12,
+            horizontalScrollbarSize: 12,
+            arrowSize: 20,
+          },
         }}
       />
     </div>
-  )
+  );
 }
