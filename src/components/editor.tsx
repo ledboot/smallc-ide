@@ -1,7 +1,7 @@
 'use client';
 
 import {useEffect, useRef} from 'react';
-import type {Breakpoint, FileType} from '@/types';
+import type {Breakpoint} from '@/types';
 import {saveFile} from '@/lib/db';
 import {Editor as MonacoEditor} from '@monaco-editor/react';
 import {useCompilerStore} from '@/state/useCompiler';

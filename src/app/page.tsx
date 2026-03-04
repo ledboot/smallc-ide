@@ -16,7 +16,6 @@ const Editor = dynamic(() => import('@/components/editor'), {
   ),
 });
 
-import type {FileType} from '@/types';
 import {Loader2, X, ChevronUp} from 'lucide-react';
 import Sidebar, {type SidebarTab} from '@/components/sidebar';
 import DeployPanel from '@/components/deployPanel';
@@ -34,11 +33,10 @@ import {useFileStore} from '@/state/useFile';
 
 export default function SmallcIDE() {
   const [isLoading, setIsLoading] = useState(true);
-  const {files, setFiles, refreshFiles} = useFileStore();
+  const {files, refreshFiles} = useFileStore();
   const {
     currentFile,
     openTabs,
-    handleOpenFile,
     handleCloseTab,
     handleSwitchTab,
     cleanupInvalidTabs,

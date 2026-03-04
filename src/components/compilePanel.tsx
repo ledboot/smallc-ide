@@ -15,12 +15,11 @@ import {PlayIcon, InfoIcon, FileIcon, Bug} from 'lucide-react';
 import {Switch} from '@/components/ui/switch';
 import type {CompiledResult, FileType} from '@/types';
 import {compilerService, isWasmReady} from '@/lib/wasm-compiler';
-import {createFolder, getFile, saveFile} from '@/lib/db';
+import {saveFile} from '@/lib/db';
 import {toast} from 'sonner';
 
 import {Asm} from '@/lib/asm';
 
-import {generateContractTemplate} from '@/utils/templateGenerator';
 import {LogLevel, useConsoleStore} from '@/state/useConsole';
 import {useCompilerStore} from '@/state/useCompiler';
 import {useSettingsStore} from '@/state/useSettings';

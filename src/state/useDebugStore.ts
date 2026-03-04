@@ -190,7 +190,7 @@ export const useDebugStore = create<DebugState & DebugActions>((set, get) => ({
     // Find the code segment containing this VM line
     for (const code of debugInfo) {
       console.log('Checking code segment:', code);
-      if (code.code != "" && vmLine >= code.begin && vmLine <= code.end) {
+      if (code.code != '' && vmLine >= code.begin && vmLine <= code.end) {
         console.log('Found code segment:', code);
         if (code.vars) {
           for (const varEntry of code.vars) {

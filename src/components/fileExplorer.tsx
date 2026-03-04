@@ -21,7 +21,6 @@ import type {FileType} from '@/types';
 import {
   saveFile,
   deleteFile,
-  getAllFiles,
   createFolder,
   deleteFolder,
   renameFile,

@@ -44,7 +44,9 @@ function VariableItem({
     try {
       parsedValue = JSON.parse(value);
       isObject = true;
-    } catch (e) {}
+    } catch (e) {
+      console.error(e);
+    }
   } else if (typeof value === 'object' && value !== null) {
     isObject = true;
   } else if (structure && structure.__TYPE__ === 'struct') {

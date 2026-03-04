@@ -44,7 +44,6 @@ export default function DebugPanel() {
   const {
     isDebugging,
     debugSession,
-    debugInfo,
     setIsDebugging,
     setDebugSession,
     loadDebugInfo,

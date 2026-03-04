@@ -1,6 +1,6 @@
 'use client';
 
-import {useState, useEffect} from 'react';
+import {useState} from 'react';
 import {Button} from '@/components/ui/button';
 import {Input} from '@/components/ui/input';
 import {Label} from '@/components/ui/label';
@@ -57,7 +57,9 @@ export default function DeployPanel() {
 
   const {addLog} = useConsoleStore();
 
-  const cFiles = files.filter(file => file.name.endsWith('.c') && !file.isDirectory);
+  const cFiles = files.filter(
+    file => file.name.endsWith('.c') && !file.isDirectory,
+  );
 
   const selectedFile = cFiles.find(file => file.id === selectedFileId) ?? null;
 
@@ -87,11 +89,7 @@ export default function DeployPanel() {
 
       // Ensure .build directory exists
       const buildDir = '/.build';
-      try {
-        await createFolder(buildDir);
-      } catch (e) {
-        // Directory might already exist, ignore
-      }
+      await createFolder(buildDir);
 
       // Save to .build directory
       const timestampFilename = `${baseName}_${timestamp}.ts`;
@@ -251,7 +249,7 @@ export default function DeployPanel() {
       const abiFileName = `/${baseName}.abi`;
       const abiFile = await getFile(abiFileName);
 
-      let methodIdentifiers: Record<string, string> = {};
+      const methodIdentifiers: Record<string, string> = {};
       if (abiFile) {
         try {
           const abi = JSON.parse(abiFile.content);
