@@ -28,6 +28,7 @@ import {initWasmCompiler} from '@/lib/wasm-compiler';
 import ConsolePanel from '@/components/consolePanel';
 import DebugControlPanel from '@/components/debugControlPanel';
 import EditorTabs from '@/components/editorTabs';
+import Header from '@/components/header';
 import {useTabsStore} from '@/state/useTabs';
 import {useFileStore} from '@/state/useFile';
 
@@ -178,15 +179,7 @@ export default function SmallcIDE() {
 
   return (
     <div className="flex h-screen flex-col">
-      <header className="flex h-14 items-center border-b px-4 lg:px-6">
-        <h1 className="text-lg font-semibold">SmallC IDE Web</h1>
-        <div className="ml-auto flex items-center gap-2">
-          <Button variant="outline" size="sm">
-            Connect Wallet
-          </Button>
-          <Button size="sm">Deploy</Button>
-        </div>
-      </header>
+      <Header />
       <div className="flex flex-1 overflow-hidden">
         <Sidebar
           activeTab={activeSidebarTab}
