@@ -16,6 +16,7 @@ export interface ZentNetwork {
   chainId: number;
   name: string;
   rpcUrl?: string;
+  icon: string;
 }
 
 export interface ZentBalance {
@@ -35,6 +36,8 @@ export interface ZentProvider {
   getCurrentAccount(): Promise<{address: string} | null>;
   /** Get the active network. */
   getNetwork(): Promise<ZentNetwork>;
+  /** Get all available networks. */
+  getNetworks(): Promise<{[key: string]: ZentNetwork}>;
   /** Switch to a different network by chainId. */
   switchNetwork(chainId: number): Promise<void>;
   /** Get balance for an address. */

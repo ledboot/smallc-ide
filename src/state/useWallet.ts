@@ -10,6 +10,7 @@ interface WalletState {
   accounts: string[];
   currentAccount: string | null;
   network: ZentNetwork | null;
+  networks: ZentNetwork[];
 
   /** Check presence of window.zent and sync state */
   init(): Promise<void>;
@@ -17,6 +18,8 @@ interface WalletState {
   connect(): Promise<void>;
   /** Disconnect from the current site */
   disconnect(): Promise<void>;
+  /** Switch network */
+  switchNetwork(chainId: number): Promise<void>;
   /** Fetch UTXOs for the current account */
   getUtxos(address?: string): Promise<ZentUtxo[]>;
   /**
@@ -37,6 +40,7 @@ export const useWalletStore = create<WalletState>((set, get) => ({
   accounts: [],
   currentAccount: null,
   network: null,
+  networks: [],
 
   init: async () => {
     // Extension injects window.zent on document_start; poll briefly if not yet ready
@@ -74,15 +78,17 @@ export const useWalletStore = create<WalletState>((set, get) => ({
 
     // Sync current state (non-blocking — extension may not be unlocked yet)
     try {
-      const [accounts, network] = await Promise.all([
+      const [accounts, network, networksMap] = await Promise.all([
         zent.getAccounts(),
         zent.getNetwork(),
+        zent.getNetworks().catch(() => ({})),
       ]);
       set({
         accounts,
         currentAccount: accounts[0] ?? null,
         isConnected: accounts.length > 0,
         network,
+        networks: Object.values(networksMap),
       });
     } catch {
       // wallet locked or not yet approved — that's fine
@@ -94,17 +100,27 @@ export const useWalletStore = create<WalletState>((set, get) => ({
     if (!zent) throw new Error('Zent wallet extension not found');
     const accounts = await zent.requestAccounts();
     const network = await zent.getNetwork().catch(() => null);
+    const networksMap = await zent.getNetworks().catch(() => ({}));
     set({
       accounts,
       currentAccount: accounts[0] ?? null,
       isConnected: accounts.length > 0,
       network: network ?? null,
+      networks: Object.values(networksMap),
     });
   },
 
   disconnect: async () => {
     await window.zent?.disconnect().catch(() => undefined);
     set({isConnected: false, accounts: [], currentAccount: null});
+  },
+
+  switchNetwork: async (chainId: number) => {
+    const zent = window.zent;
+    if (!zent) throw new Error('Zent wallet extension not found');
+    await zent.switchNetwork(chainId);
+    const network = await zent.getNetwork().catch(() => null);
+    set({network});
   },
 
   getUtxos: async (address?: string) => {
