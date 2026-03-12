@@ -159,11 +159,7 @@ export const DeployedContractCard = ({
 
       // Ensure .build directory exists
       const buildDir = '/.build';
-      try {
-        await createFolder(buildDir);
-      } catch (e) {
-        // Directory might already exist, ignore
-      }
+      await createFolder(buildDir);
 
       // Save to .build directory
       const filename = `${contractName.replace('.c', '')}_runner.js`;

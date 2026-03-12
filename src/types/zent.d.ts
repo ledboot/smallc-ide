@@ -12,7 +12,6 @@ export interface ZentUtxo {
   scriptPubKey?: string;
 }
 
-
 export interface ZentNetwork {
   id: string;
   chainId: number;

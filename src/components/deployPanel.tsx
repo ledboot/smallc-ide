@@ -17,7 +17,7 @@ import {
   FileIcon,
 } from 'lucide-react';
 import type {FileType} from '@/types';
-import {ChainType, CHAIN_INFO} from '@/constants';
+import {ChainType} from '@/constants';
 import {useSettingsStore} from '@/state/useSettings';
 import {toast} from 'sonner';
 import {MsgT} from '@/utils/msgTools';
@@ -35,11 +35,8 @@ import {useFileStore} from '@/state/useFile';
 import {useWalletStore} from '@/state/useWallet';
 
 export default function DeployPanel() {
-  const chainType = useSettingsStore(state => state.chainType);
   const compiledResultMap = useCompilerStore(state => state.compiledResultMap);
   const [isDeploying, setIsDeploying] = useState(false);
-  const [deploymentResult, setDeploymentResult] = useState<string | null>(null);
-  const setChainType = useSettingsStore(state => state.setChainType);
   const {files, refreshFiles} = useFileStore();
 
   const {
@@ -145,7 +142,6 @@ export default function DeployPanel() {
     }
 
     setIsDeploying(true);
-    setDeploymentResult(null);
 
     try {
       // 1. Fetch UTXOs from wallet
@@ -282,10 +278,6 @@ export default function DeployPanel() {
     } finally {
       setIsDeploying(false);
     }
-  };
-
-  const handleSetChainType = (chainType: ChainType) => {
-    setChainType(chainType);
   };
 
   return (

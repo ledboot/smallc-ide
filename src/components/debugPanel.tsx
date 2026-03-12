@@ -135,7 +135,7 @@ export default function DebugPanel() {
       }
     };
     fetchRunData();
-  }, [currentDebugFileId, loadDebugInfo]);
+  }, [currentDebugFileId, debugFile, loadDebugInfo]);
 
   const handleMethodCall = async (
     methodSignature: string,

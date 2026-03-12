@@ -29,12 +29,9 @@ export default function CompilePanel() {
   const [selectedFile, setSelectedFile] = useState<string>('');
   const [isCompiling, setIsCompiling] = useState(false);
 
-  const [compiledData, setCompiledData] = useState<CompiledResult | null>(null);
   const [debugMode, setDebugMode] = useState(false);
 
   const {addLog} = useConsoleStore();
-  const chainType = useSettingsStore(state => state.chainType);
-  const compiledResultMap = useCompilerStore(state => state.compiledResultMap);
   const setCompiledResult = useCompilerStore(state => state.setCompiledResult);
   const {files, refreshFiles} = useFileStore();
 
@@ -48,18 +45,6 @@ export default function CompilePanel() {
       setSelectedFile(sourceFiles[0]!.id);
     }
   }, [sourceFiles, selectedFile]);
-
-  useEffect(() => {
-    const file = sourceFiles.find(f => f.id === selectedFile);
-    if (file) {
-      const compiledResult = compiledResultMap.get(file.name);
-      if (compiledResult) {
-        setCompiledData(compiledResult);
-      } else {
-        setCompiledData(null);
-      }
-    }
-  }, [compiledResultMap, selectedFile, sourceFiles]);
 
   const handleCompile = async () => {
     if (!selectedFile) {

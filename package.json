@@ -6,10 +6,10 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "gts lint",
-    "clean": "gts clean",
+    "lint": "bunx gts lint src",
+    "clean": "bunx gts clean",
     "compile": "tsc",
-    "fix": "gts fix"
+    "fix": "bunx gts fix src"
   },
   "dependencies": {
     "@isomorphic-git/lightning-fs": "^4.6.2",

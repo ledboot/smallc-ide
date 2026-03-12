@@ -261,11 +261,6 @@ int main() {
     }
   };
 
-  const openContextMenu = (item: FileType, parentPath: string = '') => {
-    setContextItem(item);
-    setContextParentPath(parentPath);
-  };
-
   const renderFileTree = (items: FileType[], level = 0, parentPath = '') => {
     return items.map(item => {
       const isExpanded = expandedFolders.has(item.id);
