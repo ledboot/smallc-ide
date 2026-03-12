@@ -5,11 +5,13 @@
 
 export interface ZentUtxo {
   txid: string;
-  vout: number;
+  index: number;
   value: number; // satoshis
-  status?: string;
+  tokenType: string;
+  address?: string;
   scriptPubKey?: string;
 }
+
 
 export interface ZentNetwork {
   id: string;
