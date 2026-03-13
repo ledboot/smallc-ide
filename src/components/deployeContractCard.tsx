@@ -95,7 +95,6 @@ export const DeployedContractCard = ({
       defParams,
     );
     // TODO: Implement actual contract method call
-    const params = (inputParams || '').split(',');
 
     const toAddress = contractAddress;
     const ops: Record<string, string> = {
@@ -115,7 +114,6 @@ export const DeployedContractCard = ({
     const amount = BigInt(1);
     // $t = sprintf("%s%s%s%s%s", rev64(sprintf("%016x", $amount)), rev64(sprintf("%016x", 12+24)), rev64(sprintf("%016x", 12+24+25)), $pkScript, $sig);
     const amountHex = Number(amount).toString(16).padStart(16, '0');
-    const revAmountHex = hashReverse(amountHex); // rev64(sprintf("%016x", $amount))
 
     // const txData = `${revAmount}${revPkScript}`;
 

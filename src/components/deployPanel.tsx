@@ -17,8 +17,7 @@ import {
   FileIcon,
 } from 'lucide-react';
 import type {FileType} from '@/types';
-import {ChainType} from '@/constants';
-import {useSettingsStore} from '@/state/useSettings';
+
 import {toast} from 'sonner';
 import {MsgT} from '@/utils/msgTools';
 import {bytesToHex2} from '@/utils/index';

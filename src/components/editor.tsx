@@ -87,7 +87,7 @@ export default function Editor() {
   useEffect(() => {
     if (!editorRef.current || !currentFile) return;
     updateBreakpoints(editorRef.current, currentFile.breakpoints || []);
-  }, [currentFile?.breakpoints, currentFile?.name]);
+  }, [currentFile?.breakpoints, currentFile?.name, currentFile]);
 
   const handleEditorDidMount = (
     editor: monaco.editor.IStandaloneCodeEditor,

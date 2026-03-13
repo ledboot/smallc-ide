@@ -261,7 +261,7 @@ int main() {
     }
   };
 
-  const renderFileTree = (items: FileType[], level = 0, parentPath = '') => {
+  const renderFileTree = (items: FileType[], level = 0, _parentPath = '') => {
     return items.map(item => {
       const isExpanded = expandedFolders.has(item.id);
       const isSelected = currentFile?.id === item.id;

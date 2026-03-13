@@ -148,7 +148,7 @@ export function batchCompile(asmFiles: {name: string; code: string}[]) {
 
 // 导出主要功能
 export {Asm};
-export default {
+const AsmExample = {
   compile: compileAsmCode,
   batchCompile,
   demonstrate: demonstrateAsmLib,
@@ -156,3 +156,5 @@ export default {
   formatCode: Asm.formatCode,
   getSupportedOpcodes: Asm.getSupportedOpcodes,
 };
+
+export default AsmExample;

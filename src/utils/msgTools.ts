@@ -259,7 +259,7 @@ export class MsgT {
     return m;
   }
 
-  lockInput(v: any) {
+  lockInput(_v: any) {
     // omegaDB.transaction(function (dbtx) {
     //   if (v == undefined) v = 1;
     //   for (var i = 0; i < T.TIn.length; i++) {
@@ -271,7 +271,7 @@ export class MsgT {
     // });
   }
 
-  inputOf(tokenType: any) {
+  inputOf(_tokenType: any) {
     // return new Promise(resolve=>omegaDB.transaction(function (dbtx) {
     //   var sql = '', glue = '';
     //   for (var i = 0; i < T.TIn.length; i++) {

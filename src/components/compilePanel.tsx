@@ -13,7 +13,7 @@ import {Label} from '@/components/ui/label';
 import {Badge} from '@/components/ui/badge';
 import {PlayIcon, InfoIcon, FileIcon, Bug} from 'lucide-react';
 import {Switch} from '@/components/ui/switch';
-import type {CompiledResult, FileType} from '@/types';
+import type {FileType} from '@/types';
 import {compilerService, isWasmReady} from '@/lib/wasm-compiler';
 import {saveFile} from '@/lib/db';
 import {toast} from 'sonner';
@@ -22,7 +22,7 @@ import {Asm} from '@/lib/asm';
 
 import {LogLevel, useConsoleStore} from '@/state/useConsole';
 import {useCompilerStore} from '@/state/useCompiler';
-import {useSettingsStore} from '@/state/useSettings';
+
 import {useFileStore} from '@/state/useFile';
 
 export default function CompilePanel() {
