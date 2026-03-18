@@ -42,7 +42,7 @@ export default function DeployPanel() {
     isConnected,
     currentAccount,
     network,
-    getUtxos,
+    getCurrentAccountUtxos,
     signTransaction,
     sendTransaction,
   } = useWalletStore();
@@ -144,21 +144,19 @@ export default function DeployPanel() {
 
     try {
       // 1. Fetch UTXOs from wallet
-      const utxos = await getUtxos();
-      if (!utxos || utxos.length === 0) {
-        throw new Error('No UTXOs found in your wallet');
-      }
-
       // 2. Prepare the contract deployment script
       // SmallC Deployment format: 0x88 (OP_DEPLOY) + contractHash + 00000000 + bytecode
       const script = '88' + result.hash + '00000000' + result.bytecode;
       const fee = 1200 + script.length * 1000; // Legacy fee calculation
+      const minRequiredValue = BigInt(fee + 1000);
+      const utxos = await getCurrentAccountUtxos(minRequiredValue);
+      if (!utxos || utxos.length === 0) {
+        throw new Error('No UTXOs found in your wallet');
+      }
 
       // 3. Find a suitable UTXO (simplistic selection: first one with enough balance)
       // Note: SmallC UTXOs usually have tokenType 0 for ZENT.
-      const selectedUtxo = utxos.find(
-        u => BigInt(u.value) >= BigInt(fee + 1000),
-      );
+      const selectedUtxo = utxos.find(u => BigInt(u.value) >= minRequiredValue);
       if (!selectedUtxo) {
         throw new Error(
           `Insufficient funds. Need at least ${fee + 1000} satoshis.`,

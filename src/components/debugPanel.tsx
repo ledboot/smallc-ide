@@ -13,8 +13,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {useSettingsStore} from '@/state/useSettings';
-import {rpcClient} from '@/lib/api';
 import {toast} from 'sonner';
 import {runContractMethod} from '@/utils/contractRunner';
 import {
@@ -35,11 +33,11 @@ import {
 import {useFileStore} from '@/state/useFile';
 import {useConsoleStore, LogLevel} from '@/state/useConsole';
 import {useDebugStore} from '@/state/useDebugStore';
+import {useWalletStore} from '@/state/useWallet';
 
 import {useTabsStore} from '@/state/useTabs';
 
 export default function DebugPanel() {
-  const chainType = useSettingsStore(state => state.chainType);
   const handleOpenFile = useTabsStore(state => state.handleOpenFile);
   const {
     isDebugging,
@@ -86,6 +84,14 @@ export default function DebugPanel() {
 
   const [runDataList, setRunDataList] = useState<any[]>([]);
   const {addLog} = useConsoleStore();
+  const {
+    isConnected,
+    currentAccount,
+    signTransaction,
+    sendTransaction,
+    tryContract,
+    contractCall,
+  } = useWalletStore();
 
   useEffect(() => {
     const fetchRunData = async () => {
@@ -169,51 +175,37 @@ export default function DebugPanel() {
         return;
       }
 
-      // Step 2: Call different API methods based on apiType
-      let result;
-      const client = rpcClient.getClient(chainType);
-
+      // Step 2: Execute method through wallet extension
       switch (apiType) {
         case 'sendRawTransaction': {
-          const privateKey = process.env.NEXT_PUBLIC_PRIVATE_KEY || '';
-          if (!privateKey) {
-            toast.error('Private key not found in environment variables');
+          if (!isConnected || !currentAccount) {
+            toast.error('Please connect your wallet first');
             return;
           }
 
-          // Sign the transaction first
-          const signedTx = await client.signRawTransaction(
-            rawTx,
-            [],
-            [privateKey],
-            false,
+          addLog('Requesting signature from wallet...', null, LogLevel.INFO);
+          const signedTxHex = await signTransaction(rawTx);
+          addLog('Transaction signed', {signedTxHex}, LogLevel.SUCCESS);
+
+          addLog('Broadcasting transaction...', null, LogLevel.INFO);
+          const txHash = await sendTransaction(signedTxHex);
+          addLog(
+            'sendRawTransaction executed successfully',
+            {txHash},
+            LogLevel.SUCCESS,
           );
-          if (signedTx.error) {
-            toast.error('Sign raw transaction failed');
-            addLog('Sign Error:', signedTx.error, LogLevel.ERROR);
-            return;
-          }
-
-          // Send the signed transaction
-          result = await client.sendRawTransaction(signedTx.result.hex);
-          if (result.error) {
-            toast.error('Send raw transaction failed');
-            addLog('Send Error:', result.error, LogLevel.ERROR);
-            return;
-          }
-          addLog('sendRawTransaction executed successfully', result);
           toast.success('Transaction sent successfully');
           break;
         }
 
         case 'tryContract': {
-          result = await client.tryContract(rawTx);
+          const result = await tryContract(rawTx);
           if (result.error) {
             toast.error('Try contract failed');
             addLog('tryContract Error:', result.error, LogLevel.ERROR);
             return;
           }
-          addLog('tryContract executed successfully', result);
+          addLog('tryContract executed successfully', result, LogLevel.SUCCESS);
           toast.success('Contract tried successfully');
           break;
         }
@@ -228,13 +220,17 @@ export default function DebugPanel() {
             return;
           }
 
-          result = await client.contractCall(runData.contractAddress, rawTx);
+          const result = await contractCall(runData.contractAddress, rawTx);
           if (result.error) {
             toast.error('Contract call failed');
             addLog('contractcall Error:', result.error, LogLevel.ERROR);
             return;
           }
-          addLog('contractcall executed successfully', result);
+          addLog(
+            'contractcall executed successfully',
+            result,
+            LogLevel.SUCCESS,
+          );
           toast.success('Contract called successfully');
           break;
         }

@@ -43,8 +43,8 @@ export interface ZentProvider {
   switchNetwork(chainId: number): Promise<void>;
   /** Get balance for an address. */
   getBalance(address: string, chainId?: number): Promise<ZentBalance>;
-  /** Get spendable UTXOs for an address. */
-  getUtxos(address: string): Promise<ZentUtxo[]>;
+
+  getCurrentAccountUtxos(): Promise<ZentUtxo[]>;
   /**
    * Sign a raw transaction hex.
    * The extension will prompt the user for approval.
@@ -54,6 +54,17 @@ export interface ZentProvider {
    * Broadcast a signed raw transaction hex.
    */
   sendTransaction(signedTxHex: string): Promise<{txHash: string}>;
+  /**
+   * Simulate a contract transaction hex without broadcasting.
+   */
+  tryContract(rawTxHex: string): Promise<{id: string; error: any; result: any}>;
+  /**
+   * Call a contract method with prepared params.
+   */
+  contractCall(
+    contractAddress: string,
+    params: string,
+  ): Promise<{id: string; error: any; result: any}>;
 
   // EventEmitter API
   on(event: 'connect', listener: (data: unknown) => void): this;

@@ -20,8 +20,13 @@ interface WalletState {
   disconnect(): Promise<void>;
   /** Switch network */
   switchNetwork(chainId: number): Promise<void>;
-  /** Fetch UTXOs for the current account */
-  getUtxos(address?: string): Promise<ZentUtxo[]>;
+  /**
+   * Fetch UTXOs for the current account.
+   * Compatible forms:
+   * - getUtxos()
+   * - getUtxos(minValue)
+   */
+  getCurrentAccountUtxos(value?: number | bigint): Promise<ZentUtxo[]>;
   /**
    * Sign a raw tx hex via wallet.
    * Returns the signed transaction hex string.
@@ -32,6 +37,17 @@ interface WalletState {
    * Returns the tx hash string.
    */
   sendTransaction(signedHex: string): Promise<string>;
+  /**
+   * Simulate a contract transaction without broadcasting.
+   */
+  tryContract(rawTxHex: string): Promise<{id: string; error: any; result: any}>;
+  /**
+   * Call contract method with contract address + params.
+   */
+  contractCall(
+    contractAddress: string,
+    params: string,
+  ): Promise<{id: string; error: any; result: any}>;
 }
 
 export const useWalletStore = create<WalletState>((set, get) => ({
@@ -123,12 +139,17 @@ export const useWalletStore = create<WalletState>((set, get) => ({
     set({network});
   },
 
-  getUtxos: async (address?: string) => {
+  getCurrentAccountUtxos: async (value?: number | bigint) => {
     const zent = window.zent;
     if (!zent) throw new Error('Zent wallet extension not found');
-    const addr = address ?? get().currentAccount;
-    if (!addr) throw new Error('No account connected');
-    return zent.getUtxos(addr);
+    if (!get().currentAccount) throw new Error('No account connected');
+
+    const utxos = await zent.getCurrentAccountUtxos();
+    if (value === undefined) return utxos;
+
+    const minValueBigInt = BigInt(value);
+    const matched = utxos.filter(utxo => BigInt(utxo.value) >= minValueBigInt);
+    return matched.slice(0, 1);
   },
 
   signTransaction: async (rawTxHex: string) => {
@@ -143,5 +164,17 @@ export const useWalletStore = create<WalletState>((set, get) => ({
     if (!zent) throw new Error('Zent wallet extension not found');
     const result = await zent.sendTransaction(signedHex);
     return result.txHash;
+  },
+
+  tryContract: async (rawTxHex: string) => {
+    const zent = window.zent;
+    if (!zent) throw new Error('Zent wallet extension not found');
+    return zent.tryContract(rawTxHex);
+  },
+
+  contractCall: async (contractAddress: string, params: string) => {
+    const zent = window.zent;
+    if (!zent) throw new Error('Zent wallet extension not found');
+    return zent.contractCall(contractAddress, params);
   },
 }));

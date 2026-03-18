@@ -11,6 +11,27 @@ export function generateContractTemplate(abi: any): string {
   let mainLogic = `
 const contractAddress = "${contractAddress}";
 
+declare const walletApi: {
+  connect(): Promise<string[]>;
+  getCurrentAccount(): Promise<string | null>;
+  getNetwork(): Promise<any>;
+  getCurrentAccountUtxos(value?: number | bigint): Promise<any[]>;
+  signTransaction(rawTxHex: string): Promise<string>;
+  sendTransaction(signedHex: string): Promise<string>;
+  tryContract(rawTxHex: string): Promise<{id: string; error: any; result: any}>;
+  contractCall(
+    contractAddress: string,
+    params: string,
+  ): Promise<{id: string; error: any; result: any}>;
+};
+
+/**
+ * Wallet bridge injected by IDE at runtime.
+ * Example:
+ * const account = await walletApi.getCurrentAccount();
+ * const utxos = await walletApi.getCurrentAccountUtxos(10000n); // only UTXOs >= value
+ */
+
 // Example Input Helpers
 function getOps(addr) {
     const ops = {
@@ -58,7 +79,7 @@ const privateKey = "";
  * ${signature}
  * Method Hash: ${methodHash}
  */
-export function ${methodName}() { // Parameters from ABI: ${params.join(', ')}
+export async function ${methodName}() { // Parameters from ABI: ${params.join(', ')}
     // --- Developer Implementation ---
     console.log("Generating params for ${methodName}...");
     const methodHex = "${methodHexWithx}";
