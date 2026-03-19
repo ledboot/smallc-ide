@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1.7
-
 FROM --platform=linux/amd64 oven/bun:1.3.11-alpine AS builder
 WORKDIR /app
 
