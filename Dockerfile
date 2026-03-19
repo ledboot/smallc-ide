@@ -1,4 +1,4 @@
-FROM --platform=linux/amd64 oven/bun:1.3.11-alpine AS builder
+FROM oven/bun:1.3.11-alpine AS builder
 WORKDIR /app
 
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -9,7 +9,7 @@ RUN bun install --frozen-lockfile
 COPY . .
 RUN bun run build
 
-FROM --platform=linux/amd64 oven/bun:1.3.11-alpine AS runner
+FROM oven/bun:1.3.11-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
