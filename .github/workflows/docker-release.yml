@@ -1,21 +1,28 @@
 name: Docker Release
 
 on:
-  workflow_run:
-    workflows:
-      - CI
-    types:
-      - completed
+  push:
+    branches:
+      - main
+      - develop
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+      - '**/*.mdx'
+      - '.agents/**'
+      - 'skills/**'
+      - 'scripts/**'
 
 env:
   REGISTRY: docker.io
   DOCKERHUB_USER: ${{ vars.DOCKERHUB_USER }}
   IMAGE_NAME: ${{ github.event.repository.name }}
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
   docker-release:
     if: ${{ github.event.workflow_run.conclusion == 'success' && (github.event.workflow_run.head_branch == 'main' || github.event.workflow_run.head_branch == 'develop') }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     steps:
