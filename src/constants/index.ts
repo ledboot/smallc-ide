@@ -64,16 +64,6 @@ export const HOME_CONTENT = `
 
 A powerful, web-based development environment for the SmallC language.
 
-[ Keyboard Shortcuts ]
-  Compile           : Ctrl + S
-  Search            : Ctrl + Shift + F
-  Format Code       : Ctrl + Alt + F
-
-[ Important Links ]
-  GitHub            : https://github.com/ledboot/smallc-ide
-  Discord           : https://discord.gg/your-invitation
-  Twitter           : https://x.com/your-handle
-
 Welcome to SmallC IDE Web! Select a file from the explorer to start coding.
 `;
 
