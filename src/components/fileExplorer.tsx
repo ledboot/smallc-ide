@@ -1,6 +1,6 @@
 'use client';
 
-import {useState, useEffect} from 'react';
+import {useState, useEffect, useRef} from 'react';
 import {Button} from '@/components/ui/button';
 import {Input} from '@/components/ui/input';
 import {
@@ -29,6 +29,7 @@ import {
   FolderIcon,
   FileIcon,
   PlusIcon,
+  UploadIcon,
   Trash2Icon,
   ChevronRightIcon,
   ChevronDownIcon,
@@ -110,6 +111,8 @@ export default function FileExplorer({onFileDelete}: FileExplorerProps) {
   const [fileTree, setFileTree] = useState<FileType[]>([]);
   const [contextItem, setContextItem] = useState<FileType | null>(null);
   const [contextParentPath, setContextParentPath] = useState<string>('');
+  const [uploadParentPath, setUploadParentPath] = useState<string>('');
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const {files, addFile, refreshFiles, expandedFolders, toggleFolder} =
     useFileStore();
 
@@ -117,6 +120,67 @@ export default function FileExplorer({onFileDelete}: FileExplorerProps) {
     const tree = buildTreeFromFiles(files);
     setFileTree(tree);
   }, [files]);
+
+  const handleUploadTrigger = (parentPath = '') => {
+    setUploadParentPath(parentPath);
+    fileInputRef.current?.click();
+  };
+
+  const handleFileUpload = async (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const selectedFiles = event.target.files;
+    if (!selectedFiles || selectedFiles.length === 0) return;
+
+    const allowedExtensions = new Set(['.c', '.h']);
+    let uploadedCount = 0;
+    let skippedCount = 0;
+
+    for (const selectedFile of Array.from(selectedFiles)) {
+      const extension = selectedFile.name
+        .slice(selectedFile.name.lastIndexOf('.'))
+        .toLowerCase();
+      if (!allowedExtensions.has(extension)) {
+        skippedCount += 1;
+        continue;
+      }
+
+      const filePath = uploadParentPath
+        ? `${uploadParentPath}/${selectedFile.name}`
+        : `/${selectedFile.name}`;
+
+      if (files.some(file => file.id === filePath)) {
+        skippedCount += 1;
+        continue;
+      }
+
+      const content = await selectedFile.text();
+      const uploadedFile: FileType = {
+        id: filePath,
+        name: selectedFile.name,
+        content,
+        lastModified: new Date().toISOString(),
+        isDirectory: false,
+        path: filePath,
+      };
+
+      await saveFile(uploadedFile);
+      addFile(uploadedFile);
+      uploadedCount += 1;
+    }
+
+    if (uploadedCount > 0) {
+      toast.success(
+        `Uploaded ${uploadedCount} file${uploadedCount > 1 ? 's' : ''}`,
+      );
+    }
+    if (skippedCount > 0) {
+      toast.error(`Skipped ${skippedCount} file${skippedCount > 1 ? 's' : ''}`);
+    }
+
+    event.target.value = '';
+    setUploadParentPath('');
+  };
 
   const handleCreateFile = async (parentPath?: string) => {
     if (!newFileName) return;
@@ -323,6 +387,11 @@ int main() {
                     New Folder
                   </ContextMenuItem>
                   <ContextMenuSeparator />
+                  <ContextMenuItem onClick={() => handleUploadTrigger(item.id)}>
+                    <UploadIcon className="mr-2 h-4 w-4" />
+                    Upload .c/.h Files
+                  </ContextMenuItem>
+                  <ContextMenuSeparator />
                 </>
               )}
               <ContextMenuItem
@@ -360,6 +429,23 @@ int main() {
       <div className="flex items-center justify-between border-b p-4">
         <h2 className="font-medium">Files</h2>
         <div className="flex gap-1">
+          <input
+            ref={fileInputRef}
+            type="file"
+            className="hidden"
+            accept=".c,.h"
+            multiple
+            onChange={handleFileUpload}
+          />
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            title="Upload .c/.h Files"
+            onClick={() => handleUploadTrigger()}
+          >
+            <UploadIcon className="h-4 w-4" />
+          </Button>
           <Button
             variant="ghost"
             size="icon"
@@ -391,7 +477,7 @@ int main() {
           <div className="flex flex-col items-center justify-center py-8 text-center text-sm text-muted-foreground">
             <FolderIcon className="mb-2 h-8 w-8" />
             <p>No files yet</p>
-            <p>Click + to create a new file</p>
+            <p>Click + to create or upload a new file</p>
           </div>
         ) : (
           <div className="space-y-1">{renderFileTree(fileTree)}</div>
@@ -416,7 +502,7 @@ int main() {
           </DialogHeader>
           <div className="py-4">
             <Input
-              placeholder="File name (e.g. main.c, app.cpp, header.h)"
+              placeholder="File name (e.g. main.c, header.h)"
               value={newFileName}
               onChange={e => setNewFileName(e.target.value)}
               onKeyDown={e => {
