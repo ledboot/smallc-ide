@@ -1,6 +1,6 @@
 services:
   smallc-ide:
-    image: smallc-ide:amd64
+    image: docker.io/ledboot/smallc-ide:latest
     platform: linux/amd64
     build:
       context: .
