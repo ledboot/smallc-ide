@@ -4066,11 +4066,17 @@ async function createWasm() {
         return ret;
       },
   };
-  function ___syscall_dup(fd) {
+  function ___syscall_dup3(fd, newfd, flags) {
   try {
   
       var old = SYSCALLS.getStreamFromFD(fd);
-      return FS.dupStream(old).fd;
+      assert(!flags);
+      if (old.fd === newfd) return -28;
+      // Check newfd is within range of valid open file descriptors.
+      if (newfd < 0 || newfd >= FS.MAX_OPEN_FDS) return -8;
+      var existing = FS.getStream(newfd);
+      if (existing) FS.close(existing);
+      return FS.dupStream(old, newfd).fd;
     } catch (e) {
     if (typeof FS == 'undefined' || !(e.name === 'ErrnoError')) throw e;
     return -e.errno;
@@ -5006,7 +5012,7 @@ var wasmImports = {
   /** @export */
   __cxa_throw: ___cxa_throw,
   /** @export */
-  __syscall_dup: ___syscall_dup,
+  __syscall_dup3: ___syscall_dup3,
   /** @export */
   __syscall_fcntl64: ___syscall_fcntl64,
   /** @export */
