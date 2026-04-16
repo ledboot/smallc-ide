@@ -1,13 +1,13 @@
 # TS Script Runtime API
 
-本文档用于说明在 IDE 中执行合约 TS 脚本时，可直接调用的运行时能力。
+This document describes the runtime capabilities available when executing a contract TypeScript script inside the IDE.
 
-## 1. 执行入口约定
+## 1. Entry-point Convention
 
-- 你的方法必须 `export`，并由 IDE 按方法名调用（例如 `setTotal`）。
-- 如果方法内使用 `await`，必须写成 `async` 方法。
+- Your function must be `export`ed and will be called by the IDE using its exact name (e.g. `setTotal`).
+- If your function uses `await`, it must be declared `async`.
 
-示例：
+Example:
 
 ```ts
 export async function setTotal() {
@@ -16,9 +16,9 @@ export async function setTotal() {
 }
 ```
 
-## 2. walletApi（可直接调用）
+## 2. `walletApi` (globally injected)
 
-执行器会注入全局对象 `walletApi`：
+The runner injects a global `walletApi` object:
 
 ```ts
 declare const walletApi: {
@@ -30,29 +30,32 @@ declare const walletApi: {
   sendTransaction(signedHex: string): Promise<string>
   tryContract(
     rawTxHex: string
-  ): Promise<{id: string; error: any; result: any}>
+  ): Promise<{ id: string; error: any; result: any }>
   contractCall(
     contractAddress: string,
     params: string
-  ): Promise<{id: string; error: any; result: any}>
+  ): Promise<{ id: string; error: any; result: any }>
 }
 ```
 
-说明：
+Notes:
 
-- `getCurrentAccountUtxos(value?)` 仅针对当前已连接账户。
-- 当 `value` 有值时，只返回一条满足 `utxo.value >= value` 的记录（`[]` 或 `[utxo]`）。
+- `getCurrentAccountUtxos(value?)` operates on the currently connected account only.
+- When `value` is provided, at most one UTXO satisfying `utxo.value >= value` is returned (`[]` or `[utxo]`).
 
-## 3. 内置工具（无需 import）
+## 3. Built-in Utilities (no import required)
 
-脚本运行时会自动注入 `BUNDLED_UTILS_CODE`，常用能力包括：
+The script runtime automatically injects `BUNDLED_UTILS_CODE`. Available utilities include:
 
-- 交易结构类：`MsgT`、`TinDef`、`ToutDef`
-- 地址工具：`Address.toPkScript(address)`
-- 编码工具：`rev32`、`rev64`、`bytesToHex2`、`hashReverse`、`hexToBytes`
-- 底层工具类：`Reader`、`Packer`、`Base58`
+| Utility | Description |
+|---|---|
+| `MsgT`, `TinDef`, `ToutDef` | Transaction builder classes |
+| `Address.toPkScript(address)` | Convert an address to its pkScript |
+| `rev32`, `rev64` | 32-bit / 64-bit byte-order reversal |
+| `bytesToHex2`, `hashReverse`, `hexToBytes` | Hex encoding helpers |
+| `Reader`, `Packer`, `Base58` | Low-level encoding utilities |
 
-示例：
+Example:
 
 ```ts
 const methodHex = '6aff4f7b'
@@ -62,28 +65,29 @@ const msg = new MsgT()
 msg.version = 0x11
 
 const utxos = await walletApi.getCurrentAccountUtxos(1200n)
-if (utxos.length === 0) throw new Error('No available utxo')
+if (utxos.length === 0) throw new Error('No available UTXO')
 
 const rawTxHex = bytesToHex2(msg.encode(0))
 return rawTxHex
 ```
 
-## 4. console 输出
+## 4. Console Output
 
-- 可以直接使用 `console.log/info/warn/error`。
-- 输出会被 IDE 控制台面板捕获并展示。
+Use `console.log`, `console.info`, `console.warn` and `console.error` directly. All output is captured and displayed in the IDE console panel.
 
-## 5. require 可用模块
+## 5. Available `require` Modules
 
-仅支持以下模块：
+Only the following modules are supported:
 
-- `@noble/hashes/sha2`（或 `@noble/hashes/sha2.js`）
-- `big-integer`
+| Module |
+|---|
+| `@noble/hashes/sha2` (or `@noble/hashes/sha2.js`) |
+| `big-integer` |
 
-其他模块会抛错：`Module 'xxx' is not available in the contract runner environment.`
+Any other module will throw:
+`Module 'xxx' is not available in the contract runner environment.`
 
-## 6. 返回值建议
+## 6. Return Value
 
-- 推荐返回 `rawTxHex`（字符串），便于 IDE 后续签名/广播流程接管。
-- 若你自行调用签名/广播方法，请确保业务流程不会重复提交交易。
-
+- Returning a `rawTxHex` string is recommended so the IDE can take over the signing and broadcasting flow.
+- If you call `signTransaction` / `sendTransaction` yourself, make sure your logic does not submit the transaction twice.
