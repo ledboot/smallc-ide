@@ -42,3 +42,4 @@ next-env.d.ts
 contract-example
 temp.md
 *.code-workspace
+.antigravitycli/
