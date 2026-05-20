@@ -653,8 +653,8 @@ int main() {
             <DialogTitle>File Already Exists</DialogTitle>
           </DialogHeader>
           <div className="py-4">
-            A file named "{conflict?.file.name}" already exists. What would you
-            like to do?
+            A file named &quot;{conflict?.file.name}&quot; already exists. What
+            would you like to do?
           </div>
           <DialogFooter className="sm:justify-start flex-wrap gap-2">
             <Button
