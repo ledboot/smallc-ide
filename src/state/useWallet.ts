@@ -78,19 +78,21 @@ export const useWalletStore = create<WalletState>((set, get) => ({
 
     set({isExtensionAvailable: true});
 
-    // Register event listeners
-    zent.on('accountsChanged', (accounts: string[]) => {
-      set({
-        accounts,
-        currentAccount: accounts[0] ?? null,
-        isConnected: accounts.length > 0,
+    // Register event listeners safely
+    if (typeof zent.on === 'function') {
+      zent.on('accountsChanged', (accounts: string[]) => {
+        set({
+          accounts: accounts || [],
+          currentAccount: accounts?.[0] ?? null,
+          isConnected: (accounts || []).length > 0,
+        });
       });
-    });
 
-    zent.on('networkChanged', async () => {
-      const network = await window.zent?.getNetwork().catch(() => null);
-      set({network: network ?? null});
-    });
+      zent.on('networkChanged', async () => {
+        const network = await window.zent?.getNetwork().catch(() => null);
+        set({network: network ?? null});
+      });
+    }
 
     // Sync current state (non-blocking — extension may not be unlocked yet)
     try {

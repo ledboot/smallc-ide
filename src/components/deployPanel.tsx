@@ -294,7 +294,7 @@ export default function DeployPanel() {
         <div className="space-y-6">
           <div className="flex items-center gap-2 px-1 border-t pt-8">
             <FileIcon className="h-4 w-4 text-primary/70" />
-            <span className="text-sm font-bold uppercase tracking-widest">
+            <span className="text-sm font-bold tracking-widest">
               Contract Deployment
             </span>
           </div>
@@ -329,36 +329,31 @@ export default function DeployPanel() {
                     ))}
                   </SelectContent>
                 </Select>
-                {selectedFile && (
-                  <p className="text-[10px] font-bold text-primary/60 mt-2 px-2 uppercase tracking-widest animate-pulse">
-                    Target: {selectedFile.name}
-                  </p>
-                )}
               </div>
-
               <div className="flex justify-center">
                 <Button
                   onClick={isConnected ? handleDeploy : undefined}
                   disabled={isDeploying || (isConnected && !selectedFile)}
                   className={cn(
-                    'w-55 h-14 text-sm font-black uppercase tracking-widest transition-all hover:scale-[1.01] active:scale-[0.98] shadow-lg shadow-primary/20',
+                    'w-fit px-8 h-10 text-xs font-bold tracking-widest transition-all hover:scale-[1.02] active:scale-[0.98] shadow-md shadow-primary/20 rounded-xl group relative overflow-hidden border-none',
                     !isConnected &&
                       'bg-muted text-muted-foreground cursor-not-allowed opacity-70',
                   )}
                 >
+                  <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/10 to-white/0 -translate-x-full group-hover:animate-shimmer pointer-events-none" />
                   {!isConnected ? (
                     <>
-                      <InfoIcon className="mr-3 h-5 w-5" />
+                      <InfoIcon className="mr-2 h-4 w-4" />
                       Connect Wallet
                     </>
                   ) : isDeploying ? (
                     <>
-                      <GasIcon className="mr-3 h-5 w-5 animate-spin" />
+                      <GasIcon className="mr-2 h-4 w-4 animate-spin" />
                       Deploying...
                     </>
                   ) : (
                     <>
-                      <RocketIcon className="mr-3 h-5 w-5 fill-current" />
+                      <RocketIcon className="mr-2 h-4 w-4 fill-current transition-transform group-hover:scale-110" />
                       Deploy
                     </>
                   )}

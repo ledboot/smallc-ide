@@ -13,7 +13,6 @@ import {
   SelectTrigger,
 } from '@/components/ui/select';
 import type {ZentNetwork} from '@/types/zent.d';
-import Image from 'next/image';
 
 /**
  * WalletConnect — shows extension status, connect/disconnect.
@@ -99,7 +98,7 @@ export default function WalletConnect() {
                   className="text-[10px] h-5 px-2 font-black tracking-tight border-muted-foreground/15 bg-background/50 hover:bg-background transition-colors flex items-center gap-1.5 cursor-pointer"
                 >
                   {network.icon && (
-                    <Image
+                    <img
                       src={network.icon}
                       alt=""
                       className="w-3 h-3 rounded-full"
@@ -118,7 +117,7 @@ export default function WalletConnect() {
                   >
                     <div className="flex items-center gap-2">
                       {net.icon && (
-                        <Image
+                        <img
                           src={net.icon}
                           alt=""
                           className="w-4 h-4 rounded-full"
@@ -158,16 +157,17 @@ export default function WalletConnect() {
     <Button
       variant="outline"
       size="sm"
-      className="h-9 gap-2 font-bold tracking-tight border-primary/20 hover:border-primary/50 hover:bg-primary/5 transition-all active:scale-95 shadow-sm"
+      className="relative h-10 px-4 gap-2 overflow-hidden border-primary/20 text-xs font-bold tracking-tight shadow-sm transition-all hover:border-primary/50 hover:bg-primary/5 active:scale-95 rounded-xl group"
       onClick={handleConnect}
       disabled={isLoading}
     >
+      <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-primary/10 to-transparent group-hover:animate-shimmer pointer-events-none" />
       {isLoading ? (
         <Loader2Icon className="h-4 w-4 animate-spin" />
       ) : (
-        <WalletIcon className="h-4 w-4 text-primary" />
+        <WalletIcon className="h-4 w-4 text-primary transition-transform group-hover:scale-110" />
       )}
-      Connect Wallet
+      <span className="relative z-10">Connect Wallet</span>
     </Button>
   );
 }

@@ -266,16 +266,17 @@ export default function CompilePanel() {
           <Button
             onClick={handleCompile}
             disabled={isCompiling || !selectedFile || sourceFiles.length === 0}
-            className="w-55 h-14 text-sm font-black uppercase tracking-widest bg-primary text-primary-foreground transition-all hover:scale-[1.01] active:scale-[0.98] shadow-lg shadow-primary/20"
+            className="w-fit px-8 h-10 text-xs font-bold tracking-widest bg-primary text-primary-foreground transition-all hover:scale-[1.02] active:scale-[0.98] shadow-md shadow-primary/20 rounded-xl group relative overflow-hidden border-none"
           >
+            <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/10 to-white/0 -translate-x-full group-hover:animate-shimmer pointer-events-none" />
             {isCompiling ? (
               <>
-                <PlayIcon className="mr-3 h-5 w-5 animate-spin" />
+                <PlayIcon className="mr-3 h-5 w-5 animate-pulse" />
                 Processing...
               </>
             ) : (
               <>
-                <PlayIcon className="mr-3 h-5 w-5 fill-current" />
+                <PlayIcon className="mr-3 h-5 w-5 fill-current transition-transform group-hover:scale-110" />
                 {selectedFile?.endsWith('.ts')
                   ? 'Execute Script'
                   : 'Build Contract'}
