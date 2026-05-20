@@ -56,6 +56,13 @@ export class RPCClient {
     return clientInstances[chainType];
   }
 
+  // Reset/delete the cached client instance to force re-instantiation
+  public static resetClient(
+    chainType: ChainType = ChainType.ZENT_TESTNET,
+  ): void {
+    delete clientInstances[chainType];
+  }
+
   // Generic RPC call
   async rpcCall(method: string, params: unknown[] = []) {
     const response = await this.client.post('', {

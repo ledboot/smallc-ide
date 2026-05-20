@@ -34,11 +34,19 @@ import {useFileStore} from '@/state/useFile';
 import {useConsoleStore, LogLevel} from '@/state/useConsole';
 import {useDebugStore} from '@/state/useDebugStore';
 import {useWalletStore} from '@/state/useWallet';
-
 import {useTabsStore} from '@/state/useTabs';
+import {useNodeStore} from '@/state/useNodeStore';
 
 export default function DebugPanel() {
   const handleOpenFile = useTabsStore(state => state.handleOpenFile);
+  const {leasedNode, timeRemaining} = useNodeStore();
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
   const {
     isDebugging,
     debugSession,
@@ -379,7 +387,7 @@ export default function DebugPanel() {
   };
 
   return (
-    <div className="flex h-full flex-col p-2 pt-4 space-y-10">
+    <div className="flex h-full flex-col p-2 pt-4 space-y-6">
       {/* Integrated Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -389,6 +397,46 @@ export default function DebugPanel() {
           <h2 className="text-xl font-bold tracking-tight">Debugger</h2>
         </div>
       </div>
+
+      {/* Leased RPC Node Information Card */}
+      {leasedNode && (
+        <div className="flex flex-col gap-1.5 p-3.5 rounded-2xl bg-gradient-to-r from-emerald-500/10 to-teal-500/10 border border-emerald-500/20 shadow-[0_0_12px_rgba(16,185,129,0.06)] animate-fade-in">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+              <span className="text-[10px] font-black tracking-wider text-emerald-400 uppercase">
+                Dedicated RPC Leased
+              </span>
+            </div>
+            <span className="text-[10px] font-bold font-mono text-emerald-400 bg-emerald-500/15 px-2 py-0.5 rounded-full border border-emerald-500/10">
+              {formatTime(timeRemaining)}
+            </span>
+          </div>
+          <div className="mt-1 space-y-1 divide-y divide-emerald-500/5">
+            <div className="flex items-center justify-between text-[10px] text-muted-foreground pt-1 first:pt-0">
+              <span>Node Name</span>
+              <span className="font-semibold text-emerald-400/90">
+                {leasedNode.name}
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-[10px] text-muted-foreground pt-1 first:pt-0">
+              <span>Host Address</span>
+              <span className="font-mono text-foreground/80">
+                {leasedNode.host}:{leasedNode.port}
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-[10px] text-muted-foreground pt-1 first:pt-0">
+              <span>Credentials</span>
+              <span className="font-mono text-foreground/80">
+                {leasedNode.rpcUser} / {leasedNode.rpcPass}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="flex-1 space-y-10 pr-1">
         {/* Session Discovery - Flat */}

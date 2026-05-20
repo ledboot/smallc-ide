@@ -14,6 +14,7 @@ import {
 } from '@/lib/debugWebSocket';
 import {processVariableValue} from '@/lib/debugUtils';
 import {useConsoleStore, LogLevel} from './useConsole';
+import {useNodeStore} from './useNodeStore';
 
 interface DebugSession {
   sessionId: string;
@@ -108,6 +109,21 @@ export const useDebugStore = create<DebugState & DebugActions>((set, get) => ({
 
   // WebSocket connection management
   connectDebugWS: async () => {
+    // Automatically lease a dedicated high-performance RPC node for debugging if not already leased.
+    const {leasedNode, leaseNode} = useNodeStore.getState();
+    if (!leasedNode) {
+      toast.info(
+        'Starting debug session: leasing a dedicated high-performance RPC node...',
+        {
+          duration: 3000,
+        },
+      );
+      const node = await leaseNode();
+      if (!node) {
+        throw new Error('Failed to lease a dedicated RPC node for debugging.');
+      }
+    }
+
     const {chainType} = useSettingsStore.getState();
     const wsClient = getDebugWSClient(chainType);
     try {
@@ -163,6 +179,12 @@ export const useDebugStore = create<DebugState & DebugActions>((set, get) => ({
     });
     disconnectDebugWS();
     setIsDebugging(false);
+
+    // Automatically release the leased node when debugging is finished to free up resources.
+    const {leasedNode, releaseNode} = useNodeStore.getState();
+    if (leasedNode) {
+      releaseNode();
+    }
   },
 
   getDebugClient: () => {
