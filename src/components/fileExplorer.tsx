@@ -36,6 +36,7 @@ import {
   FolderPlusIcon,
   Edit2Icon,
   FileTextIcon,
+  DownloadIcon,
 } from 'lucide-react';
 import {toast} from 'sonner';
 import {useFileStore} from '@/state/useFile';
@@ -115,6 +116,42 @@ export default function FileExplorer({onFileDelete}: FileExplorerProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const {files, addFile, refreshFiles, expandedFolders, toggleFolder} =
     useFileStore();
+  const [conflict, setConflict] = useState<{
+    file: File;
+    path: string;
+    resolve: (action: 'keep' | 'replace' | 'skip') => void;
+  } | null>(null);
+
+  const resolveConflict = (
+    file: File,
+    path: string,
+  ): Promise<'keep' | 'replace' | 'skip'> => {
+    return new Promise(resolve => {
+      setConflict({file, path, resolve});
+    });
+  };
+
+  const getUniquePath = (path: string) => {
+    const lastDotIndex = path.lastIndexOf('.');
+    const extension = lastDotIndex !== -1 ? path.slice(lastDotIndex) : '';
+    const baseName = lastDotIndex !== -1 ? path.slice(0, lastDotIndex) : path;
+
+    // First try "xx copy.xx"
+    let newPath = `${baseName} copy${extension}`;
+    if (!files.some(f => f.id === newPath)) {
+      return newPath;
+    }
+
+    // Then try "xx copy 2.xx", "xx copy 3.xx", etc.
+    let counter = 2;
+    while (true) {
+      newPath = `${baseName} copy ${counter}${extension}`;
+      if (!files.some(f => f.id === newPath)) {
+        return newPath;
+      }
+      counter++;
+    }
+  };
 
   useEffect(() => {
     const tree = buildTreeFromFiles(files);
@@ -132,7 +169,7 @@ export default function FileExplorer({onFileDelete}: FileExplorerProps) {
     const selectedFiles = event.target.files;
     if (!selectedFiles || selectedFiles.length === 0) return;
 
-    const allowedExtensions = new Set(['.c', '.h']);
+    const allowedExtensions = new Set(['.c', '.h', '.abi']);
     let uploadedCount = 0;
     let skippedCount = 0;
 
@@ -145,19 +182,25 @@ export default function FileExplorer({onFileDelete}: FileExplorerProps) {
         continue;
       }
 
-      const filePath = uploadParentPath
+      let filePath = uploadParentPath
         ? `${uploadParentPath}/${selectedFile.name}`
         : `/${selectedFile.name}`;
 
       if (files.some(file => file.id === filePath)) {
-        skippedCount += 1;
-        continue;
+        const action = await resolveConflict(selectedFile, filePath);
+        if (action === 'skip') {
+          skippedCount += 1;
+          continue;
+        } else if (action === 'keep') {
+          filePath = getUniquePath(filePath);
+        }
+        // for 'replace', filePath remains the same
       }
 
       const content = await selectedFile.text();
       const uploadedFile: FileType = {
         id: filePath,
-        name: selectedFile.name,
+        name: filePath.substring(filePath.lastIndexOf('/') + 1),
         content,
         lastModified: new Date().toISOString(),
         isDirectory: false,
@@ -180,6 +223,7 @@ export default function FileExplorer({onFileDelete}: FileExplorerProps) {
 
     event.target.value = '';
     setUploadParentPath('');
+    setConflict(null);
   };
 
   const handleCreateFile = async (parentPath?: string) => {
@@ -325,6 +369,21 @@ int main() {
     }
   };
 
+  const handleDownload = (item: FileType) => {
+    if (item.isDirectory) return;
+
+    const blob = new Blob([item.content || ''], {type: 'text/plain'});
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = item.name;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    toast.success(`Downloaded ${item.name}`);
+  };
+
   const renderFileTree = (items: FileType[], level = 0, _parentPath = '') => {
     return items.map(item => {
       const isExpanded = expandedFolders.has(item.id);
@@ -340,7 +399,7 @@ int main() {
                     ? 'bg-accent text-accent-foreground'
                     : 'hover:bg-muted'
                 }`}
-                style={{paddingLeft: `${level * 16 + 8}px`}}
+                style={{paddingLeft: `${level * 12 + 6}px`}}
                 onClick={e => {
                   e.stopPropagation();
                   if (item.isDirectory) {
@@ -389,7 +448,7 @@ int main() {
                   <ContextMenuSeparator />
                   <ContextMenuItem onClick={() => handleUploadTrigger(item.id)}>
                     <UploadIcon className="mr-2 h-4 w-4" />
-                    Upload .c/.h Files
+                    Upload Files (.c, .h, .abi)
                   </ContextMenuItem>
                   <ContextMenuSeparator />
                 </>
@@ -404,6 +463,12 @@ int main() {
                 <Edit2Icon className="mr-2 h-4 w-4" />
                 Rename
               </ContextMenuItem>
+              {!item.isDirectory && (
+                <ContextMenuItem onClick={() => handleDownload(item)}>
+                  <DownloadIcon className="mr-2 h-4 w-4" />
+                  Download
+                </ContextMenuItem>
+              )}
               <ContextMenuItem
                 className="text-destructive"
                 onClick={() => handleDelete(item)}
@@ -433,7 +498,7 @@ int main() {
             ref={fileInputRef}
             type="file"
             className="hidden"
-            accept=".c,.h"
+            accept=".c,.h,.abi"
             multiple
             onChange={handleFileUpload}
           />
@@ -441,7 +506,7 @@ int main() {
             variant="ghost"
             size="icon"
             className="h-8 w-8"
-            title="Upload .c/.h Files"
+            title="Upload Files (.c, .h, .abi)"
             onClick={() => handleUploadTrigger()}
           >
             <UploadIcon className="h-4 w-4" />
@@ -472,7 +537,7 @@ int main() {
           </Button>
         </div>
       </div>
-      <div className="overflow-auto p-2">
+      <div className="overflow-auto py-2 pl-1 pr-2">
         {fileTree.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 text-center text-sm text-muted-foreground">
             <FolderIcon className="mb-2 h-8 w-8" />
@@ -572,6 +637,39 @@ int main() {
           </div>
           <DialogFooter>
             <Button onClick={handleRename}>Rename</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Conflict Resolution Dialog */}
+      <Dialog
+        open={!!conflict}
+        onOpenChange={open => {
+          if (!open) conflict?.resolve('skip');
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>File Already Exists</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            A file named "{conflict?.file.name}" already exists. What would you
+            like to do?
+          </div>
+          <DialogFooter className="sm:justify-start flex-wrap gap-2">
+            <Button
+              variant="secondary"
+              onClick={() => conflict?.resolve('keep')}
+            >
+              Keep both
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => conflict?.resolve('replace')}
+            >
+              Replace
+            </Button>
+            <Button onClick={() => conflict?.resolve('skip')}>Skip</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

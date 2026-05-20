@@ -44,7 +44,7 @@ export default function Editor() {
       return 'cpp';
     if (fileName.endsWith('.h') || fileName.endsWith('.hpp')) return 'cpp';
     if (fileName.endsWith('.js')) return 'javascript';
-    if (fileName.endsWith('.json')) return 'json';
+    if (fileName.endsWith('.json') || fileName.endsWith('.abi')) return 'json';
     if (fileName.endsWith('.ts')) return 'typescript';
     return 'plaintext';
   };
