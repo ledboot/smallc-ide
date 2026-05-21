@@ -202,7 +202,8 @@ export const useNodeStore = create(
               state.restoreDefaultConfig();
             }
           } else {
-            state.setTimeRemaining(0);
+            // No leasedAt means we cannot verify the lease is still valid — clear it.
+            state.restoreDefaultConfig();
           }
         }
       },
