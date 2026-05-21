@@ -46,17 +46,9 @@ export const useNodeStore = create(
         try {
           const node = await leaseRpcNode();
 
-          // Re-format host if needed (strip protocol if any exists, but usually it's just hostname or IP)
-          const cleanHost = node.host.replace(
-            /^(hw|http|https|ws|wss):\/\//,
-            '',
-          );
-          const nodeHttpEndpoint = `http://${cleanHost}:${node.port}`;
-          const nodeWsEndpoint = `ws://${cleanHost}:${node.port}/ws`;
-
-          // Dynamically update CHAIN_INFO
-          CHAIN_INFO[ChainType.ZENT_TESTNET].endpoints = [nodeHttpEndpoint];
-          CHAIN_INFO[ChainType.ZENT_TESTNET].wsEndpoints = [nodeWsEndpoint];
+          // Dynamically update CHAIN_INFO using the pre-configured endpoints
+          CHAIN_INFO[ChainType.ZENT_TESTNET].endpoints = [node.httpsEndpoint];
+          CHAIN_INFO[ChainType.ZENT_TESTNET].wsEndpoints = [node.wssEndpoint];
           CHAIN_INFO[ChainType.ZENT_TESTNET].rpcUser = node.rpcUser;
           CHAIN_INFO[ChainType.ZENT_TESTNET].rpcPassword = node.rpcPass;
 
@@ -169,15 +161,9 @@ export const useNodeStore = create(
       onRehydrateStorage: () => state => {
         if (state && state.leasedNode) {
           const node = state.leasedNode;
-          const cleanHost = node.host.replace(
-            /^(hw|http|https|ws|wss):\/\//,
-            '',
-          );
-          const nodeHttpEndpoint = `http://${cleanHost}:${node.port}`;
-          const nodeWsEndpoint = `ws://${cleanHost}:${node.port}/ws`;
 
-          CHAIN_INFO[ChainType.ZENT_TESTNET].endpoints = [nodeHttpEndpoint];
-          CHAIN_INFO[ChainType.ZENT_TESTNET].wsEndpoints = [nodeWsEndpoint];
+          CHAIN_INFO[ChainType.ZENT_TESTNET].endpoints = [node.httpsEndpoint];
+          CHAIN_INFO[ChainType.ZENT_TESTNET].wsEndpoints = [node.wssEndpoint];
           CHAIN_INFO[ChainType.ZENT_TESTNET].rpcUser = node.rpcUser;
           CHAIN_INFO[ChainType.ZENT_TESTNET].rpcPassword = node.rpcPass;
 

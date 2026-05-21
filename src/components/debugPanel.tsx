@@ -423,15 +423,9 @@ export default function DebugPanel() {
               </span>
             </div>
             <div className="flex items-center justify-between text-[10px] text-muted-foreground pt-1 first:pt-0">
-              <span>Host Address</span>
+              <span>Endpoint</span>
               <span className="font-mono text-foreground/80">
-                {leasedNode.host}:{leasedNode.port}
-              </span>
-            </div>
-            <div className="flex items-center justify-between text-[10px] text-muted-foreground pt-1 first:pt-0">
-              <span>Credentials</span>
-              <span className="font-mono text-foreground/80">
-                {leasedNode.rpcUser} / {leasedNode.rpcPass}
+                {leasedNode.httpsEndpoint}
               </span>
             </div>
           </div>
