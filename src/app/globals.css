@@ -252,3 +252,47 @@
 *::-webkit-scrollbar-corner {
   background: transparent;
 }
+
+/* Premium Console Scrollbar Styles */
+.console-scrollbar {
+  /* Firefox */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.45) rgba(255, 255, 255, 0.08);
+}
+
+/* Chrome, Safari, Edge, Opera */
+.console-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.console-scrollbar::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 9999px;
+}
+
+.console-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.45);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  transition: background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.console-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.7);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.console-scrollbar::-webkit-scrollbar-thumb:active {
+  background: rgba(255, 255, 255, 0.9);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.console-scrollbar::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+
