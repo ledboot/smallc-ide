@@ -2,10 +2,7 @@ import axios, {type AxiosInstance, AxiosHeaders} from 'axios';
 import {ChainType, DebugCallType, CHAIN_INFO} from '@/constants';
 
 // Store client instances
-const clientInstances: Record<ChainType, RPCClient> = {} as Record<
-  ChainType,
-  RPCClient
->;
+const clientInstances: Partial<Record<ChainType, RPCClient>> = {};
 
 export class RPCClient {
   private readonly client: AxiosInstance;
@@ -53,7 +50,7 @@ export class RPCClient {
     if (!clientInstances[chainType]) {
       clientInstances[chainType] = new RPCClient(chainType);
     }
-    return clientInstances[chainType];
+    return clientInstances[chainType]!;
   }
 
   // Reset/delete the cached client instance to force re-instantiation

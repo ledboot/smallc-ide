@@ -2,11 +2,7 @@ import type {ChainInfo} from '@/types';
 import type {FileType} from '@/types';
 
 export enum ChainType {
-  //   ZENT_MAINNET = 'ZENT_MAINNET',
   ZENT_TESTNET = 'ZENT_TESTNET',
-  ZENT_LOCAL = 'ZENT_LOCAL',
-  //   HOVM_MAINNET = 'HOVM_MAINNET',
-  //   GCT_TESTNET = 'GCT_TESTNET',
 }
 
 export enum NetworkType {
@@ -19,24 +15,12 @@ export const CHAIN_INFO: {[key in ChainType]: ChainInfo} = {
     label: 'ZENT Testnet',
     iconLabel: 'ZENT',
     chainId: 0x1,
-    endpoints: ['http://omegasuite.org:7789'],
-    wsEndpoints: ['ws://omegasuite.org:7789/ws'],
+    endpoints: [],
+    wsEndpoints: [],
     icon: './images/artifacts/bitcoin-mainnet.svg',
     unit: 'ZENT',
-    rpcUser: 'admin',
-    rpcPassword: 'FFh5rL',
-    networkType: NetworkType.TESTNET,
-  },
-  [ChainType.ZENT_LOCAL]: {
-    label: 'ZENT Local',
-    iconLabel: 'ZENT',
-    chainId: 0x1,
-    endpoints: ['http://127.0.0.1:7700'],
-    wsEndpoints: ['ws://127.0.0.1:7700/ws'],
-    icon: './images/artifacts/bitcoin-mainnet.svg',
-    unit: 'ZENT',
-    rpcUser: 'admin',
-    rpcPassword: 'FFh5rL',
+    rpcUser: '',
+    rpcPassword: '',
     networkType: NetworkType.TESTNET,
   },
 };

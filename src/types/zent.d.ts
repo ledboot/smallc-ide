@@ -51,6 +51,11 @@ export interface ZentProvider {
    */
   signTransaction(rawTxHex: string): Promise<{signedTransaction: string}>;
   /**
+   * Sign a text message.
+   * The extension will prompt the user for approval.
+   */
+  signMessage(message: string): Promise<string>;
+  /**
    * Broadcast a signed raw transaction hex.
    */
   sendTransaction(signedTxHex: string): Promise<{txHash: string}>;

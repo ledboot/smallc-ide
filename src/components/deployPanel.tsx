@@ -52,7 +52,10 @@ export default function DeployPanel() {
   const {addLog} = useConsoleStore();
 
   const cFiles = files.filter(
-    file => file.name.endsWith('.c') && !file.isDirectory,
+    file =>
+      file.name.endsWith('.c') &&
+      !file.isDirectory &&
+      file.name !== 'buildin.c',
   );
 
   const selectedFile = cFiles.find(file => file.id === selectedFileId) ?? null;

@@ -4,7 +4,6 @@ import {useEffect, useState} from 'react';
 import {Button} from '@/components/ui/button';
 import {Badge} from '@/components/ui/badge';
 import {useWalletStore} from '@/state/useWallet';
-import {useNodeStore} from '@/state/useNodeStore';
 import {toast} from 'sonner';
 import {WalletIcon, LogOutIcon, Loader2Icon} from 'lucide-react';
 import {
@@ -32,9 +31,6 @@ export default function WalletConnect() {
     switchNetwork,
   } = useWalletStore();
   const [isLoading, setIsLoading] = useState(false);
-
-  const {leasedNode, isLeasing, timeRemaining, leaseNode, releaseNode} =
-    useNodeStore();
 
   // Initialise once on mount — detects extension & syncs state
   useEffect(() => {
@@ -80,50 +76,10 @@ export default function WalletConnect() {
   const shortAddress = (addr: string) =>
     `${addr.slice(0, 6)}…${addr.slice(-4)}`;
 
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
-
   // Connected
   if (isConnected && currentAccount) {
     return (
       <div className="flex items-center gap-2">
-        {/* Leased RPC Node controls */}
-        {leasedNode ? (
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500/10 to-teal-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-black tracking-tight shadow-[0_0_12px_rgba(16,185,129,0.08)]">
-            <span className="relative flex h-1.5 w-1.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
-            </span>
-            <span>
-              RPC: {leasedNode.name} [{formatTime(timeRemaining)}]
-            </span>
-            <button
-              onClick={releaseNode}
-              className="ml-1 font-bold text-emerald-400/60 hover:text-emerald-300 transition-colors"
-              title="Release dedicated node"
-            >
-              ✕
-            </button>
-          </div>
-        ) : (
-          <Button
-            onClick={() => leaseNode()}
-            disabled={isLeasing}
-            variant="outline"
-            className="h-[30px] px-3 gap-1 bg-amber-500/5 hover:bg-amber-500/10 border-amber-500/20 hover:border-amber-500/40 text-amber-500 hover:text-amber-400 text-[10px] font-bold tracking-tight rounded-xl transition-all shadow-[0_0_8px_rgba(245,158,11,0.02)] active:scale-95 flex items-center"
-          >
-            {isLeasing ? (
-              <Loader2Icon className="h-3 w-3 animate-spin text-amber-500" />
-            ) : (
-              <span className="text-amber-500">⚡</span>
-            )}
-            <span>{isLeasing ? 'Leasing...' : 'Lease RPC Node'}</span>
-          </Button>
-        )}
-
         <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-primary/5 border border-primary/10">
           <div className="h-2 w-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]" />
           <span className="text-xs font-mono font-bold tracking-tight text-foreground/80">

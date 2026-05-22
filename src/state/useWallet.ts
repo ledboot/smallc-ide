@@ -48,6 +48,11 @@ interface WalletState {
     contractAddress: string,
     params: string,
   ): Promise<{id: string; error: any; result: any}>;
+  /**
+   * Sign a text message via wallet.
+   * Returns hex-encoded signature.
+   */
+  signMessage(message: string): Promise<string>;
 }
 
 export const useWalletStore = create<WalletState>((set, get) => ({
@@ -178,5 +183,11 @@ export const useWalletStore = create<WalletState>((set, get) => ({
     const zent = window.zent;
     if (!zent) throw new Error('Zent wallet extension not found');
     return zent.contractCall(contractAddress, params);
+  },
+
+  signMessage: async (message: string) => {
+    const zent = window.zent;
+    if (!zent) throw new Error('Zent wallet extension not found');
+    return zent.signMessage(message);
   },
 }));

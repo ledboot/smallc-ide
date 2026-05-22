@@ -35,9 +35,12 @@ export default function CompilePanel() {
   const setCompiledResult = useCompilerStore(state => state.setCompiledResult);
   const {files, refreshFiles} = useFileStore();
 
-  // Filter out .c and .ts files
+  // Filter out .c and .ts files, excluding buildin.c
   const sourceFiles = files.filter(
-    file => file.name.endsWith('.c') && !file.isDirectory,
+    file =>
+      file.name.endsWith('.c') &&
+      !file.isDirectory &&
+      file.name !== 'buildin.c',
   );
   // Automatically select first file
   useEffect(() => {

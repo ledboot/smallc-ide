@@ -1,9 +1,16 @@
 'use client';
 
-import {DebugCallType} from '@/constants';
+import {DebugCallType, ChainType} from '@/constants';
 import {useState, useEffect} from 'react';
 import {useShallow} from 'zustand/react/shallow';
-import {FileIcon, Bug, ChevronDown, ChevronUp} from 'lucide-react';
+import {
+  FileIcon,
+  Bug,
+  ChevronDown,
+  ChevronUp,
+  Zap,
+  Loader2,
+} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {Label} from '@/components/ui/label';
 import {
@@ -15,6 +22,7 @@ import {
 } from '@/components/ui/select';
 import {toast} from 'sonner';
 import {runContractMethod} from '@/utils/contractRunner';
+import {getRPCClient} from '@/lib/api';
 import {
   Tooltip,
   TooltipContent,
@@ -39,7 +47,8 @@ import {useNodeStore} from '@/state/useNodeStore';
 
 export default function DebugPanel() {
   const handleOpenFile = useTabsStore(state => state.handleOpenFile);
-  const {leasedNode, timeRemaining} = useNodeStore();
+  const {leasedNode, timeRemaining, releaseNode, leaseNode, isLeasing} =
+    useNodeStore();
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -83,10 +92,15 @@ export default function DebugPanel() {
     state.files.find(f => f.id === currentDebugFileId),
   );
 
-  // Filter C files for debugging
+  // Filter C files for debugging, excluding buildin.c
   const files = useFileStore(
     useShallow(state =>
-      state.files.filter(file => file.name.endsWith('.c') && !file.isDirectory),
+      state.files.filter(
+        file =>
+          file.name.endsWith('.c') &&
+          !file.isDirectory &&
+          file.name !== 'buildin.c',
+      ),
     ),
   );
 
@@ -95,6 +109,8 @@ export default function DebugPanel() {
   const {
     isConnected,
     currentAccount,
+    connect,
+    isExtensionAvailable,
     signTransaction,
     sendTransaction,
     tryContract,
@@ -253,6 +269,42 @@ export default function DebugPanel() {
   const attachDebugSession = async () => {
     if (!debugFile) {
       toast.error('Please select a file to debug');
+      return;
+    }
+
+    if (!leasedNode) {
+      toast.error(
+        'No active Dedicated RPC lease. Please lease a Dedicated RPC node first.',
+      );
+      return;
+    }
+
+    const checkToastId = toast.loading('Verifying RPC node connectivity...');
+    try {
+      const client = getRPCClient(ChainType.ZENT_TESTNET);
+      console.log('client', client);
+      const checkResult = (await Promise.race([
+        client.rpcCall('getblockchaininfo'),
+        new Promise((_, reject) =>
+          setTimeout(
+            () => reject(new Error('Connection timed out after 5 seconds')),
+            5000,
+          ),
+        ),
+      ])) as any;
+
+      if (!checkResult || checkResult.error !== null) {
+        throw new Error(
+          checkResult?.error?.message || 'Invalid JSON-RPC response',
+        );
+      }
+      toast.dismiss(checkToastId);
+    } catch (err: any) {
+      toast.dismiss(checkToastId);
+      toast.error('No available RPC node found or node is offline', {
+        description:
+          err.message || 'Please verify your RPC node configuration.',
+      });
       return;
     }
 
@@ -423,11 +475,114 @@ export default function DebugPanel() {
               </span>
             </div>
             <div className="flex items-center justify-between text-[10px] text-muted-foreground pt-1 first:pt-0">
-              <span>Endpoint</span>
+              <span>http(s) endpoint</span>
               <span className="font-mono text-foreground/80">
                 {leasedNode.httpsEndpoint}
               </span>
             </div>
+            <div className="flex items-center justify-between text-[10px] text-muted-foreground pt-1 first:pt-0">
+              <span>ws(s) endpoint</span>
+              <span className="font-mono text-foreground/80">
+                {leasedNode.wssEndpoint}
+              </span>
+            </div>
+          </div>
+          <div className="mt-2.5 pt-2 border-t border-emerald-500/10 flex justify-end">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={releaseNode}
+              className="h-6 px-2.5 text-[10px] text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-full border border-red-500/20 hover:border-red-500/35 transition-colors cursor-pointer"
+            >
+              ReleaseNode
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {!leasedNode && (
+        <div
+          className={
+            'flex flex-col gap-4 p-5 rounded-2xl border backdrop-blur-md ' +
+            'bg-gradient-to-br from-indigo-500/10 via-purple-500/5 to-pink-500/10 ' +
+            'border-indigo-500/20 shadow-[0_0_20px_rgba(99,102,241,0.08)] ' +
+            'transition-all duration-300 hover:shadow-[0_0_30px_rgba(99,102,241,0.15)] ' +
+            'hover:border-indigo-500/30 animate-fade-in'
+          }
+        >
+          <div className="flex items-center gap-3">
+            <div
+              className={
+                'p-2.5 bg-indigo-500/15 rounded-xl border border-indigo-500/20 ' +
+                'shadow-[0_0_15px_rgba(99,102,241,0.15)]'
+              }
+            >
+              <Zap className="h-5 w-5 text-indigo-400 animate-pulse" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold tracking-wide text-indigo-400 uppercase">
+                Dedicated Debug RPC
+              </h3>
+              <p className="text-[10px] text-muted-foreground mt-0.5">
+                Lease an exclusive node for zero-delay debugging.
+              </p>
+            </div>
+          </div>
+
+          <div
+            className={
+              'text-xs text-muted-foreground/80 leading-relaxed bg-zinc-950/20 ' +
+              'p-3 rounded-xl border border-white/5 font-medium'
+            }
+          >
+            Requires signing a secure cryptographic challenge via your Zent
+            Wallet extension to verify ownership and authorize the node lease.
+          </div>
+
+          <div className="flex flex-col gap-2">
+            {!isExtensionAvailable ? (
+              <div
+                className={
+                  'text-center p-2 rounded-xl bg-amber-500/10 border border-amber-500/20 ' +
+                  'text-[10px] font-semibold text-amber-400'
+                }
+              >
+                Zent Wallet Extension not detected. Please install it first.
+              </div>
+            ) : !isConnected ? (
+              <Button
+                onClick={connect}
+                className={
+                  'w-full h-9 text-xs bg-zinc-900/80 hover:bg-zinc-800 text-zinc-100 ' +
+                  'border border-zinc-700/80 hover:border-zinc-600 rounded-xl ' +
+                  'transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] ' +
+                  'cursor-pointer'
+                }
+              >
+                Connect Wallet to Lease
+              </Button>
+            ) : (
+              <Button
+                onClick={() => leaseNode()}
+                disabled={isLeasing}
+                className={
+                  'w-full h-9 text-xs text-white font-medium rounded-xl transition-all ' +
+                  'bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 ' +
+                  'hover:to-purple-700 shadow-lg shadow-indigo-500/25 ' +
+                  'hover:shadow-indigo-600/35 hover:scale-[1.02] active:scale-[0.98] ' +
+                  'cursor-pointer disabled:opacity-50 disabled:hover:scale-100 duration-300'
+                }
+              >
+                {isLeasing ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Leasing Dedicated Node...
+                  </span>
+                ) : (
+                  'Lease RPC Node'
+                )}
+              </Button>
+            )}
           </div>
         </div>
       )}

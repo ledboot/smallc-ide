@@ -2,19 +2,17 @@
 
 import {create} from 'zustand';
 import {persist, createJSONStorage} from 'zustand/middleware';
-import {leaseRpcNode, releaseRpcNode, type ZentNodeInfo} from '@/lib/adminApi';
+import {
+  leaseRpcNode,
+  releaseRpcNode,
+  type ZentNodeInfo,
+  type SignatureHeaders,
+} from '@/lib/adminApi';
+import {useWalletStore} from '@/state/useWallet';
 import {ChainType, CHAIN_INFO} from '@/constants';
 import {rpcClient} from '@/lib/api';
 import {disconnectDebugWSClient} from '@/lib/debugWebSocket';
 import {toast} from 'sonner';
-
-// Keep a copy of original Testnet configuration to restore when lease expires or is released.
-const ORIGINAL_TESTNET_CONFIG = {
-  endpoints: ['http://omegasuite.org:7789'],
-  wsEndpoints: ['ws://omegasuite.org:7789/ws'],
-  rpcUser: 'admin',
-  rpcPassword: 'FFh5rL',
-};
 
 interface NodeState {
   leasedNode: ZentNodeInfo | null;
@@ -42,9 +40,31 @@ export const useNodeStore = create(
       timeRemaining: 0,
 
       leaseNode: async () => {
+        const {currentAccount, signMessage, isConnected} =
+          useWalletStore.getState();
+        if (!isConnected || !currentAccount) {
+          toast.error('Wallet Disconnected', {
+            description: 'Please connect your plugin wallet to lease a node.',
+          });
+          return null;
+        }
+
         set({isLeasing: true, leaseError: null});
         try {
-          const node = await leaseRpcNode();
+          const timestamp = Math.floor(Date.now() / 1000).toString();
+          // Message format: Lease Zent RPC\nAddress: <wallet_address>\nTimestamp: <unix_timestamp>
+          const rawMessage = `Lease Zent RPC\nAddress: ${currentAccount}\nTimestamp: ${timestamp}`;
+
+          // Trigger signature popup in wallet extension
+          const signature = await signMessage(rawMessage);
+
+          const sigHeaders: SignatureHeaders = {
+            'X-Sign-PublicKey': currentAccount,
+            'X-Sign-Timestamp': timestamp,
+            'X-Sign-Signature': signature,
+          };
+
+          const node = await leaseRpcNode(currentAccount, sigHeaders);
 
           // Dynamically update CHAIN_INFO using the pre-configured endpoints
           CHAIN_INFO[ChainType.ZENT_TESTNET].endpoints = [node.httpsEndpoint];
@@ -90,15 +110,42 @@ export const useNodeStore = create(
         const {leasedNode} = get();
         if (!leasedNode) return;
 
+        const {currentAccount, signMessage, isConnected} =
+          useWalletStore.getState();
+        if (!isConnected || !currentAccount) {
+          toast.error('Wallet Disconnected', {
+            description:
+              'Please connect your plugin wallet to release the leased node.',
+          });
+          return;
+        }
+
         try {
-          await releaseRpcNode(leasedNode.id);
-        } catch (error) {
-          console.error('Failed to release node on server:', error);
-        } finally {
-          // Always restore default settings locally even if release request failed
+          const timestamp = Math.floor(Date.now() / 1000).toString();
+          // Message format: Release Zent RPC\nAddress: <wallet_address>\nTimestamp: <unix_timestamp>
+          const rawMessage = `Release Zent RPC\nAddress: ${currentAccount}\nTimestamp: ${timestamp}`;
+
+          // Trigger signature popup in wallet extension
+          const signature = await signMessage(rawMessage);
+
+          const sigHeaders: SignatureHeaders = {
+            'X-Sign-PublicKey': currentAccount,
+            'X-Sign-Timestamp': timestamp,
+            'X-Sign-Signature': signature,
+          };
+
+          await releaseRpcNode(leasedNode.id, currentAccount, sigHeaders);
+
+          // Success: restore default settings locally and show success toast
           get().restoreDefaultConfig();
-          toast.info('Dedicated RPC Node Released', {
+          toast.success('Dedicated RPC Node Released Successfully', {
             description: 'Returned to shared public testnet node.',
+          });
+        } catch (error: any) {
+          console.error('Failed to release node on server:', error);
+          const errMsg = error.message || 'Failed to release node';
+          toast.error('Release RPC Node Failed', {
+            description: errMsg,
           });
         }
       },
@@ -128,17 +175,11 @@ export const useNodeStore = create(
           countdownInterval = null;
         }
 
-        // Revert CHAIN_INFO back to original defaults
-        CHAIN_INFO[ChainType.ZENT_TESTNET].endpoints = [
-          ...ORIGINAL_TESTNET_CONFIG.endpoints,
-        ];
-        CHAIN_INFO[ChainType.ZENT_TESTNET].wsEndpoints = [
-          ...ORIGINAL_TESTNET_CONFIG.wsEndpoints,
-        ];
-        CHAIN_INFO[ChainType.ZENT_TESTNET].rpcUser =
-          ORIGINAL_TESTNET_CONFIG.rpcUser;
-        CHAIN_INFO[ChainType.ZENT_TESTNET].rpcPassword =
-          ORIGINAL_TESTNET_CONFIG.rpcPassword;
+        // Revert CHAIN_INFO back to empty defaults
+        CHAIN_INFO[ChainType.ZENT_TESTNET].endpoints = [];
+        CHAIN_INFO[ChainType.ZENT_TESTNET].wsEndpoints = [];
+        CHAIN_INFO[ChainType.ZENT_TESTNET].rpcUser = '';
+        CHAIN_INFO[ChainType.ZENT_TESTNET].rpcPassword = '';
 
         // Reset client caches
         rpcClient.resetClient(ChainType.ZENT_TESTNET);

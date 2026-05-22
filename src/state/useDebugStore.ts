@@ -1,24 +1,22 @@
-import {create} from 'zustand';
-import type {DebugNode} from '@/types';
-import {rpcClient, RPCClient} from '@/lib/api';
-import {DebugCallType} from '@/constants';
-import {useSettingsStore} from './useSettings';
-import {getFile} from '@/lib/db';
-import {toast} from 'sonner';
-import {useFileStore} from './useFile';
-import {useTabsStore} from './useTabs';
+import { create } from 'zustand';
+import type { DebugNode } from '@/types';
+import { rpcClient, RPCClient } from '@/lib/api';
+import { ChainType, DebugCallType } from '@/constants';
+import { getFile } from '@/lib/db';
+import { toast } from 'sonner';
+import { useFileStore } from './useFile';
+import { useTabsStore } from './useTabs';
 import {
   getDebugWSClient,
   disconnectDebugWSClient,
   type DebugWebSocketClient,
 } from '@/lib/debugWebSocket';
-import {processVariableValue} from '@/lib/debugUtils';
-import {useConsoleStore, LogLevel} from './useConsole';
-import {useNodeStore} from './useNodeStore';
+import { processVariableValue } from '@/lib/debugUtils';
+import { useConsoleStore, LogLevel } from './useConsole';
 
 interface DebugSession {
   sessionId: string;
-  breakpoints: {line: number; file: string}[];
+  breakpoints: { line: number; file: string }[];
 }
 
 interface DebugState {
@@ -30,8 +28,8 @@ interface DebugState {
   currentDebugFileId: string | null;
   currentLine: number | null;
   isContractCall: boolean;
-  debugVariables: {name: string; value: any; type?: string}[];
-  debugCallStack: {name: string; address: string}[];
+  debugVariables: { name: string; value: any; type?: string }[];
+  debugCallStack: { name: string; address: string }[];
   // Preparsed variable metadata (structure info without actual values)
   preparsedVariables: {
     name: string;
@@ -59,9 +57,9 @@ interface DebugActions {
   mapVmToSource: (vmOffset: number) => number | null;
   setIsContractCall: (isContractCall: boolean) => void;
   setDebugVariables: (
-    variables: {name: string; value: any; type?: string; size?: number}[],
+    variables: { name: string; value: any; type?: string; size?: number }[],
   ) => void;
-  setDebugCallStack: (callStack: {name: string; address: string}[]) => void;
+  setDebugCallStack: (callStack: { name: string; address: string }[]) => void;
   setPreparsedVariables: (
     variables: {
       name: string;
@@ -95,43 +93,27 @@ export const useDebugStore = create<DebugState & DebugActions>((set, get) => ({
   wsClient: null,
   wsConnected: false,
 
-  setIsDebugging: isDebugging => set({isDebugging}),
-  setIsPaused: isPaused => set({isPaused}),
-  setDebugSession: debugSession => set({debugSession}),
-  setBplist: bplist => set({bplist}),
-  setDebugInfo: debugInfo => set({debugInfo}),
-  setCurrentDebugFileId: currentDebugFileId => set({currentDebugFileId}),
-  setCurrentLine: currentLine => set({currentLine}),
-  setIsContractCall: isContractCall => set({isContractCall}),
-  setDebugVariables: debugVariables => set({debugVariables}),
-  setDebugCallStack: debugCallStack => set({debugCallStack}),
-  setPreparsedVariables: preparsedVariables => set({preparsedVariables}),
+  setIsDebugging: isDebugging => set({ isDebugging }),
+  setIsPaused: isPaused => set({ isPaused }),
+  setDebugSession: debugSession => set({ debugSession }),
+  setBplist: bplist => set({ bplist }),
+  setDebugInfo: debugInfo => set({ debugInfo }),
+  setCurrentDebugFileId: currentDebugFileId => set({ currentDebugFileId }),
+  setCurrentLine: currentLine => set({ currentLine }),
+  setIsContractCall: isContractCall => set({ isContractCall }),
+  setDebugVariables: debugVariables => set({ debugVariables }),
+  setDebugCallStack: debugCallStack => set({ debugCallStack }),
+  setPreparsedVariables: preparsedVariables => set({ preparsedVariables }),
 
   // WebSocket connection management
   connectDebugWS: async () => {
-    // Automatically lease a dedicated high-performance RPC node for debugging if not already leased.
-    const {leasedNode, leaseNode} = useNodeStore.getState();
-    if (!leasedNode) {
-      toast.info(
-        'Starting debug session: leasing a dedicated high-performance RPC node...',
-        {
-          duration: 3000,
-        },
-      );
-      const node = await leaseNode();
-      if (!node) {
-        throw new Error('Failed to lease a dedicated RPC node for debugging.');
-      }
-    }
-
-    const {chainType} = useSettingsStore.getState();
-    const wsClient = getDebugWSClient(chainType);
+    const wsClient = getDebugWSClient(ChainType.ZENT_TESTNET);
     try {
       await wsClient.connect();
 
       // Setup event listeners
       wsClient.onDebugEvent((event: any) => {
-        const {isDebugging, fetchDebugState, finishDebug} = get();
+        const { isDebugging, fetchDebugState, finishDebug } = get();
         if (!isDebugging) return;
 
         console.log('[DebugStore] Received VM event:', event);
@@ -152,22 +134,21 @@ export const useDebugStore = create<DebugState & DebugActions>((set, get) => ({
         }
       });
 
-      set({wsClient, wsConnected: true});
+      set({ wsClient, wsConnected: true });
     } catch (error) {
       console.error('Failed to connect debug WebSocket:', error);
-      set({wsClient: null, wsConnected: false});
+      set({ wsClient: null, wsConnected: false });
       throw error;
     }
   },
 
   disconnectDebugWS: () => {
-    const {chainType} = useSettingsStore.getState();
-    disconnectDebugWSClient(chainType);
-    set({wsClient: null, wsConnected: false});
+    disconnectDebugWSClient(ChainType.ZENT_TESTNET);
+    set({ wsClient: null, wsConnected: false });
   },
 
   finishDebug: () => {
-    const {disconnectDebugWS, setIsDebugging} = get();
+    const { disconnectDebugWS, setIsDebugging } = get();
     set({
       isDebugging: false,
       isPaused: false,
@@ -179,26 +160,19 @@ export const useDebugStore = create<DebugState & DebugActions>((set, get) => ({
     });
     disconnectDebugWS();
     setIsDebugging(false);
-
-    // Automatically release the leased node when debugging is finished to free up resources.
-    const {leasedNode, releaseNode} = useNodeStore.getState();
-    if (leasedNode) {
-      releaseNode();
-    }
   },
 
   getDebugClient: () => {
-    const {wsClient, wsConnected} = get();
+    const { wsClient, wsConnected } = get();
     if (wsClient && wsConnected && wsClient.isReady()) {
       return wsClient;
     }
-    const {chainType} = useSettingsStore.getState();
-    return rpcClient.getClient(chainType);
+    return rpcClient.getClient(ChainType.ZENT_TESTNET);
   },
 
   // Preparse variables for a given VM line (method)
   preparseVariablesForMethod: (vmLine: number) => {
-    const {debugInfo} = get();
+    const { debugInfo } = get();
     const preparsed: {
       name: string;
       type: string;
@@ -251,7 +225,7 @@ export const useDebugStore = create<DebugState & DebugActions>((set, get) => ({
       }
     }
 
-    set({preparsedVariables: preparsed});
+    set({ preparsedVariables: preparsed });
   },
 
   loadDebugInfo: async (fileName: string) => {
@@ -262,7 +236,7 @@ export const useDebugStore = create<DebugState & DebugActions>((set, get) => ({
       if (file) {
         const content = JSON.parse(file.content) as DebugNode[];
         console.log('Loaded debug info:', content);
-        set({debugInfo: content});
+        set({ debugInfo: content });
 
         // Flatten bplist
         const list: [number, number][] = [];
@@ -271,19 +245,19 @@ export const useDebugStore = create<DebugState & DebugActions>((set, get) => ({
             list.push([offset, line]);
           });
         });
-        set({bplist: list});
+        set({ bplist: list });
         console.log('Loaded debug bplist:', list);
       } else {
-        set({debugInfo: [], bplist: []});
+        set({ debugInfo: [], bplist: [] });
       }
     } catch (e) {
       console.warn('Debug info not found or invalid:', e);
-      set({debugInfo: [], bplist: []});
+      set({ debugInfo: [], bplist: [] });
     }
   },
 
   mapSourceToVm: (line: number) => {
-    const {bplist, debugInfo, isContractCall} = get();
+    const { bplist, debugInfo, isContractCall } = get();
     if (!bplist || !debugInfo) return null;
 
     // Determine offset based on whether we are in contract call (body)
@@ -301,7 +275,7 @@ export const useDebugStore = create<DebugState & DebugActions>((set, get) => ({
   },
 
   mapVmToSource: (vmOffset: number) => {
-    const {bplist} = get();
+    const { bplist } = get();
     if (!bplist) return null;
 
     // PHP logic for linemapping doesn't seem to subtract offset,
@@ -313,7 +287,7 @@ export const useDebugStore = create<DebugState & DebugActions>((set, get) => ({
   },
 
   toggleBreakpoint: (line: number, fileId: string) => {
-    const {mapSourceToVm} = get();
+    const { mapSourceToVm } = get();
     // Validate mapping first
     const vmOffset = mapSourceToVm(line);
     if (vmOffset === null) {
@@ -322,10 +296,10 @@ export const useDebugStore = create<DebugState & DebugActions>((set, get) => ({
     }
 
     // Update FileStore and TabsStore (persistence + UI)
-    const {files, updateFile} = useFileStore.getState();
-    const {currentFile, setCurrentFile, openTabs, setOpenTabs} =
+    const { files, updateFile } = useFileStore.getState();
+    const { currentFile, setCurrentFile, openTabs, setOpenTabs } =
       useTabsStore.getState();
-    const {isDebugging} = get();
+    const { isDebugging } = get();
     console.log('currentFile', currentFile);
 
     // Find the file. Use currentFile if it matches, otherwise find in store
@@ -350,12 +324,12 @@ export const useDebugStore = create<DebugState & DebugActions>((set, get) => ({
     } else {
       newBreakpoints = [
         ...existingBreakpoints,
-        {lineNumber: line, enabled: true},
+        { lineNumber: line, enabled: true },
       ];
       toast.success(`Breakpoint set at line ${line}`);
     }
 
-    const updatedFile = {...targetFile, breakpoints: newBreakpoints};
+    const updatedFile = { ...targetFile, breakpoints: newBreakpoints };
 
     // Update Stores
     updateFile(updatedFile); // Persistent store
@@ -369,7 +343,7 @@ export const useDebugStore = create<DebugState & DebugActions>((set, get) => ({
     );
     setOpenTabs(updatedTabs);
 
-    const {currentDebugFileId} = get();
+    const { currentDebugFileId } = get();
     if (isDebugging && currentDebugFileId === fileId) {
       // We can optimistically call RPC for single breakpoint toggle
       // Or re-run full sync. Full sync is safer but maybe heavier?
@@ -404,13 +378,12 @@ export const useDebugStore = create<DebugState & DebugActions>((set, get) => ({
       setDebugCallStack,
     } = get();
     const debugClient = getDebugClient();
-    const {chainType} = useSettingsStore.getState();
-    const {addLog} = useConsoleStore.getState();
+    const { addLog } = useConsoleStore.getState();
 
     try {
       // 1. Update line and pause status
       const sourceLine = mapVmToSource(vmLine);
-      set({isPaused: true, currentLine: sourceLine});
+      set({ isPaused: true, currentLine: sourceLine });
 
       // 2. Pre-parse variable metadata immediately
       preparseVariablesForMethod(vmLine);
@@ -440,7 +413,7 @@ export const useDebugStore = create<DebugState & DebugActions>((set, get) => ({
               rawValue,
               varType,
               debugInfo,
-              chainType,
+              ChainType.ZENT_TESTNET,
               debugClient,
               varSize,
               varInfo.structure,
@@ -463,7 +436,7 @@ export const useDebugStore = create<DebugState & DebugActions>((set, get) => ({
       try {
         const stackResp = await debugClient.debugCall(DebugCallType.getstack);
         if (stackResp && stackResp.result) {
-          const stackFrames: {name: string; address: string}[] = [];
+          const stackFrames: { name: string; address: string }[] = [];
           for (const addr of stackResp.result) {
             const codeSegment = debugInfo.find(
               c => addr >= c.begin && addr <= c.end,
