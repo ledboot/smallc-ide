@@ -10,4 +10,5 @@ services:
     environment:
       NODE_ENV: production
       NEXT_TELEMETRY_DISABLED: '1'
+      ADMIN_API_URL: "http://66.135.28.9:8080"
     restart: unless-stopped

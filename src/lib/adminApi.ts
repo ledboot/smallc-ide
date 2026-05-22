@@ -7,7 +7,7 @@
  */
 
 const ADMIN_API_BASE =
-  process.env.NEXT_PUBLIC_ADMIN_API_URL ?? 'http://omegasuite.org:8888';
+  process.env.NEXT_PUBLIC_ADMIN_API_URL ?? '/api/admin-api';
 
 export interface ZentNodeInfo {
   id: number;
