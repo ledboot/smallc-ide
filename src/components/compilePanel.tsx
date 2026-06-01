@@ -50,6 +50,10 @@ export default function CompilePanel() {
   }, [sourceFiles, selectedFile]);
 
   const handleCompile = async () => {
+    if (isCompiling || compilerService.isBusy()) {
+      return;
+    }
+
     if (!selectedFile) {
       toast.error('Please select a file to compile');
       return;
@@ -117,7 +121,9 @@ export default function CompilePanel() {
         }`,
       );
     } finally {
-      setIsCompiling(false);
+      if (!compilerService.isBusy()) {
+        setIsCompiling(false);
+      }
     }
   };
 
@@ -133,6 +139,20 @@ export default function CompilePanel() {
     if (asmFile && abiFile) {
       const asm = Asm.assemble(asmFile.content);
 
+      const lastSlashIndex = sourceFile.id.lastIndexOf('/');
+      const parentDir =
+        lastSlashIndex > 0 ? sourceFile.id.substring(0, lastSlashIndex) : '';
+
+      const asmPath = parentDir
+        ? `${parentDir}/${asmFile.name}`
+        : `/${asmFile.name}`;
+      const abiPath = parentDir
+        ? `${parentDir}/${abiFile.name}`
+        : `/${abiFile.name}`;
+      const dbgPath = parentDir
+        ? `${parentDir}/${sourceFile.name.split('.')[0]}.dbg`
+        : `/${sourceFile.name.split('.')[0]}.dbg`;
+
       if (asm.success) {
         const abiContent = JSON.parse(abiFile.content);
         abiContent.address = asm.hash;
@@ -140,9 +160,10 @@ export default function CompilePanel() {
 
         if (debugMode) {
           await saveFile({
-            id: sourceFile.name.split('.')[0] + '.dbg',
+            id: dbgPath,
             name: sourceFile.name.split('.')[0] + '.dbg',
             content: asm.debugInfo,
+            path: dbgPath,
             lastModified: new Date().toISOString(),
           });
         }
@@ -155,15 +176,17 @@ export default function CompilePanel() {
       }
       // 保存所有输出文件到DB
       await saveFile({
-        id: asmFile.name,
+        id: asmPath,
         name: asmFile.name,
         content: asmFile.content,
+        path: asmPath,
         lastModified: new Date().toISOString(),
       });
       await saveFile({
-        id: abiFile.name,
+        id: abiPath,
         name: abiFile.name,
         content: abiFile.content,
+        path: abiPath,
         lastModified: new Date().toISOString(),
       });
       await refreshFiles();

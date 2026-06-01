@@ -24,6 +24,7 @@ import {
   createFolder,
   deleteFolder,
   renameFile,
+  clearWorkspace,
 } from '@/lib/db';
 import {
   FolderIcon,
@@ -101,11 +102,14 @@ const buildTreeFromFiles = (files: FileType[]): FileType[] => {
 };
 
 export default function FileExplorer({onFileDelete}: FileExplorerProps) {
-  const {currentFile, handleOpenFile} = useTabsStore();
+  const {currentFile, handleOpenFile, cleanupInvalidTabs} = useTabsStore();
   const [isCreateFileDialogOpen, setIsCreateFileDialogOpen] = useState(false);
   const [isCreateFolderDialogOpen, setIsCreateFolderDialogOpen] =
     useState(false);
   const [isRenameDialogOpen, setIsRenameDialogOpen] = useState(false);
+  const [isClearDialogOpen, setIsClearDialogOpen] = useState(false);
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+  const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null);
   const [newFileName, setNewFileName] = useState('');
   const [newFolderName, setNewFolderName] = useState('');
   const [renameValue, setRenameValue] = useState('');
@@ -114,8 +118,14 @@ export default function FileExplorer({onFileDelete}: FileExplorerProps) {
   const [contextParentPath, setContextParentPath] = useState<string>('');
   const [uploadParentPath, setUploadParentPath] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const {files, addFile, refreshFiles, expandedFolders, toggleFolder} =
-    useFileStore();
+  const {
+    files,
+    addFile,
+    refreshFiles,
+    expandedFolders,
+    toggleFolder,
+    setExpandedFolders,
+  } = useFileStore();
   const [conflict, setConflict] = useState<{
     file: File;
     path: string;
@@ -154,9 +164,29 @@ export default function FileExplorer({onFileDelete}: FileExplorerProps) {
   };
 
   useEffect(() => {
+    if (currentFile && currentFile.id !== 'home') {
+      setSelectedItemId(currentFile.id);
+    } else {
+      setSelectedItemId(null);
+    }
+  }, [currentFile]);
+
+  useEffect(() => {
     const tree = buildTreeFromFiles(files);
     setFileTree(tree);
   }, [files]);
+
+  const getUploadFolderPath = (): string => {
+    if (!selectedItemId) return '';
+    const item = files.find(f => f.id === selectedItemId);
+    if (!item) return '';
+    if (item.isDirectory) {
+      return item.id;
+    } else {
+      const parentPath = item.id.substring(0, item.id.lastIndexOf('/'));
+      return parentPath || '';
+    }
+  };
 
   const handleUploadTrigger = (parentPath = '') => {
     setUploadParentPath(parentPath);
@@ -369,6 +399,63 @@ int main() {
     }
   };
 
+  const handleClearWorkspace = async () => {
+    try {
+      await clearWorkspace();
+      await refreshFiles();
+      setExpandedFolders(new Set());
+      cleanupInvalidTabs([]);
+      toast.success('Workspace cleared successfully');
+    } catch (error) {
+      console.error('Failed to clear workspace:', error);
+      toast.error('Failed to clear workspace');
+    }
+  };
+
+  const handleDragStart = (e: React.DragEvent, item: FileType) => {
+    e.dataTransfer.setData('text/plain', item.id);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDrop = async (e: React.DragEvent, targetFolder: FileType) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOverFolderId(null);
+
+    const sourceId = e.dataTransfer.getData('text/plain');
+    if (!sourceId || sourceId === targetFolder.id) return;
+
+    const itemToMove = files.find(f => f.id === sourceId);
+    if (!itemToMove) return;
+
+    const fileName = itemToMove.name;
+    const newPath =
+      targetFolder.id === '/'
+        ? `/${fileName}`
+        : `${targetFolder.id}/${fileName}`;
+
+    if (sourceId === newPath) return;
+
+    if (files.some(f => f.id === newPath)) {
+      toast.error('A file with this name already exists in the destination');
+      return;
+    }
+
+    try {
+      await renameFile(sourceId, newPath);
+      await refreshFiles();
+
+      if (currentFile && currentFile.id === sourceId) {
+        handleOpenFile(null);
+      }
+
+      toast.success(`Moved ${fileName} to ${targetFolder.name}`);
+    } catch (error) {
+      console.error('Failed to move file:', error);
+      toast.error('Failed to move file');
+    }
+  };
+
   const handleDownload = (item: FileType) => {
     if (item.isDirectory) return;
 
@@ -387,23 +474,49 @@ int main() {
   const renderFileTree = (items: FileType[], level = 0, _parentPath = '') => {
     return items.map(item => {
       const isExpanded = expandedFolders.has(item.id);
-      const isSelected = currentFile?.id === item.id;
+      const isSelected = selectedItemId === item.id;
+      const isDragOver = dragOverFolderId === item.id;
 
       return (
         <div key={item.id}>
           <ContextMenu>
             <ContextMenuTrigger className="w-full">
               <div
-                className={`flex cursor-pointer items-center rounded-md px-2 py-1 text-sm ${
+                className={`flex cursor-pointer items-center rounded-md px-2 py-1 text-sm transition-all ${
                   isSelected
                     ? 'bg-accent text-accent-foreground'
-                    : 'hover:bg-muted'
+                    : isDragOver
+                      ? 'bg-primary/10 border border-dashed border-primary text-primary scale-105'
+                      : 'hover:bg-muted'
                 }`}
                 style={{paddingLeft: `${level * 12 + 6}px`}}
+                draggable={!item.isDirectory}
+                onDragStart={e => handleDragStart(e, item)}
+                onDragOver={e => {
+                  if (item.isDirectory) {
+                    e.preventDefault();
+                    if (dragOverFolderId !== item.id) {
+                      setDragOverFolderId(item.id);
+                    }
+                  }
+                }}
+                onDragLeave={() => {
+                  if (item.isDirectory && dragOverFolderId === item.id) {
+                    setDragOverFolderId(null);
+                  }
+                }}
+                onDrop={e => {
+                  if (item.isDirectory) {
+                    handleDrop(e, item);
+                  }
+                }}
                 onClick={e => {
                   e.stopPropagation();
                   if (item.isDirectory) {
                     toggleFolder(item.id);
+                    setSelectedItemId(
+                      item.id === selectedItemId ? null : item.id,
+                    );
                   } else {
                     handleOpenFile(item);
                   }
@@ -505,9 +618,19 @@ int main() {
           <Button
             variant="ghost"
             size="icon"
+            className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+            title="Clear Workspace"
+            onClick={() => setIsClearDialogOpen(true)}
+            disabled={fileTree.length === 0}
+          >
+            <Trash2Icon className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
             className="h-8 w-8"
             title="Upload Files (.c, .h, .abi)"
-            onClick={() => handleUploadTrigger()}
+            onClick={() => handleUploadTrigger(getUploadFolderPath())}
           >
             <UploadIcon className="h-4 w-4" />
           </Button>
@@ -537,7 +660,24 @@ int main() {
           </Button>
         </div>
       </div>
-      <div className="overflow-auto py-2 pl-1 pr-2">
+      <div
+        className="flex-1 overflow-auto py-2 pl-1 pr-2"
+        onDragOver={e => {
+          e.preventDefault();
+        }}
+        onDrop={async e => {
+          e.preventDefault();
+          const mockRoot: FileType = {
+            id: '/',
+            name: 'Root',
+            isDirectory: true,
+            path: '/',
+            content: '',
+            lastModified: '',
+          };
+          await handleDrop(e, mockRoot);
+        }}
+      >
         {fileTree.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 text-center text-sm text-muted-foreground">
             <FolderIcon className="mb-2 h-8 w-8" />
@@ -670,6 +810,35 @@ int main() {
               Replace
             </Button>
             <Button onClick={() => conflict?.resolve('skip')}>Skip</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* Clear Workspace Confirmation Dialog */}
+      <Dialog open={isClearDialogOpen} onOpenChange={setIsClearDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Clear Workspace</DialogTitle>
+          </DialogHeader>
+          <div className="py-4 text-sm text-muted-foreground">
+            Are you sure you want to delete all files and folders in your
+            workspace? This action cannot be undone.
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setIsClearDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={async () => {
+                setIsClearDialogOpen(false);
+                await handleClearWorkspace();
+              }}
+            >
+              Delete All
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -86,9 +86,15 @@ export const useWalletStore = create<WalletState>((set, get) => ({
     // Register event listeners safely
     if (typeof zent.on === 'function') {
       zent.on('accountsChanged', (accounts: string[]) => {
+        console.log(
+          '[useWalletStore] zent.on("accountsChanged") received accounts:',
+          accounts,
+        );
+        const nextAccount = accounts?.[0] ?? null;
+        console.log('[useWalletStore] setting currentAccount to:', nextAccount);
         set({
           accounts: accounts || [],
-          currentAccount: accounts?.[0] ?? null,
+          currentAccount: nextAccount,
           isConnected: (accounts || []).length > 0,
         });
       });
@@ -150,12 +156,37 @@ export const useWalletStore = create<WalletState>((set, get) => ({
     const zent = window.zent;
     if (!zent) throw new Error('Zent wallet extension not found');
     if (!get().currentAccount) throw new Error('No account connected');
+    const currentAccount = await zent.getCurrentAccount();
+    console.log('[getCurrentAccountUtxos] Current account:', currentAccount);
 
     const utxos = await zent.getCurrentAccountUtxos();
+    console.log('[getCurrentAccountUtxos] Raw UTXOs:', utxos);
+
     if (value === undefined) return utxos;
 
     const minValueBigInt = BigInt(value);
-    const matched = utxos.filter(utxo => BigInt(utxo.value) >= minValueBigInt);
+    console.log(
+      '[getCurrentAccountUtxos] Required min value (satoshis):',
+      minValueBigInt.toString(),
+    );
+
+    // Filter only native ZENT UTXOs (type is '0', '0000...', empty or missing)
+    const nativeUtxos = utxos.filter(utxo => {
+      const type = String(utxo.tokenType || '').trim();
+      return (
+        type === '0' ||
+        type === '' ||
+        type ===
+          '0000000000000000000000000000000000000000000000000000000000000000'
+      );
+    });
+    console.log('[getCurrentAccountUtxos] Native ZENT UTXOs:', nativeUtxos);
+
+    const matched = nativeUtxos.filter(
+      utxo => BigInt(utxo.value) >= minValueBigInt,
+    );
+    console.log('[getCurrentAccountUtxos] Matched UTXOs (>= min):', matched);
+
     return matched.slice(0, 1);
   },
 

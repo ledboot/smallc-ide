@@ -64,13 +64,15 @@ export default function DeployPanel() {
     setSelectedFileId(fileId);
   };
 
-  const generateTemplate = async (
-    sourceFileName: string,
-    timestamp: string,
-  ) => {
+  const generateTemplate = async (sourceFile: FileType, timestamp: string) => {
     try {
-      const baseName = sourceFileName.split('.').slice(0, -1).join('.');
-      const abiFileName = `/${baseName}.abi`;
+      const baseName = sourceFile.name.split('.').slice(0, -1).join('.');
+      const lastSlashIndex = sourceFile.id.lastIndexOf('/');
+      const parentDir =
+        lastSlashIndex > 0 ? sourceFile.id.substring(0, lastSlashIndex) : '';
+      const abiFileName = parentDir
+        ? `${parentDir}/${baseName}.abi`
+        : `/${baseName}.abi`;
       const abiFile = await getFile(abiFileName);
       console.log('abiFile', abiFile);
       if (!abiFile) {
@@ -153,6 +155,7 @@ export default function DeployPanel() {
       const fee = 1200 + script.length * 1000; // Legacy fee calculation
       const minRequiredValue = BigInt(fee + 1000);
       const utxos = await getCurrentAccountUtxos(minRequiredValue);
+
       if (!utxos || utxos.length === 0) {
         throw new Error('No UTXOs found in your wallet');
       }
@@ -213,13 +216,15 @@ export default function DeployPanel() {
 
       // 6. Post-deployment persistence
       const timestamp = Math.floor(Date.now() / 1000).toString();
-      const templateFileId = await generateTemplate(
-        selectedFile.name,
-        timestamp,
-      );
+      const templateFileId = await generateTemplate(selectedFile, timestamp);
 
       const baseName = selectedFile.name.split('.').slice(0, -1).join('.');
-      const abiFileName = `/${baseName}.abi`;
+      const lastSlashIndex = selectedFile.id.lastIndexOf('/');
+      const parentDir =
+        lastSlashIndex > 0 ? selectedFile.id.substring(0, lastSlashIndex) : '';
+      const abiFileName = parentDir
+        ? `${parentDir}/${baseName}.abi`
+        : `/${baseName}.abi`;
       const abiFile = await getFile(abiFileName);
 
       const methodIdentifiers: Record<string, string> = {};
