@@ -1,6 +1,6 @@
 'use client';
 
-import {useState} from 'react';
+import {useState, useEffect, useCallback} from 'react';
 import {Button} from '@/components/ui/button';
 import {Label} from '@/components/ui/label';
 import {
@@ -16,7 +16,7 @@ import {
   InfoIcon,
   FileIcon,
 } from 'lucide-react';
-import type {FileType} from '@/types';
+import type {FileType, CompiledResult} from '@/types';
 
 import {toast} from 'sonner';
 import {MsgT} from '@/utils/msgTools';
@@ -26,6 +26,7 @@ import {Address} from '@/utils/address';
 import {getFile, saveFile, createFolder} from '@/lib/db';
 import {generateContractTemplate} from '@/utils/templateGenerator';
 import {cn} from '@/utils/twMerge';
+import {Asm} from '@/lib/asm';
 
 import {useCompilerStore} from '@/state/useCompiler';
 import {useDeployStore} from '@/state/useDeploy';
@@ -35,6 +36,7 @@ import {useWalletStore} from '@/state/useWallet';
 
 export default function DeployPanel() {
   const compiledResultMap = useCompilerStore(state => state.compiledResultMap);
+  const setCompiledResult = useCompilerStore(state => state.setCompiledResult);
   const [isDeploying, setIsDeploying] = useState(false);
   const {files, refreshFiles} = useFileStore();
 
@@ -63,6 +65,73 @@ export default function DeployPanel() {
   const handleContractSelect = (fileId: string) => {
     setSelectedFileId(fileId);
   };
+
+  const restoreCompiledResultFromStorage = useCallback(
+    async (sourceFile: FileType): Promise<CompiledResult | null> => {
+      try {
+        const baseName = sourceFile.name.split('.').slice(0, -1).join('.');
+        const lastSlashIndex = sourceFile.id.lastIndexOf('/');
+        const parentDir =
+          lastSlashIndex > 0 ? sourceFile.id.substring(0, lastSlashIndex) : '';
+        const asmFileName = parentDir
+          ? `${parentDir}/${baseName}.asm`
+          : `/${baseName}.asm`;
+        const abiFileName = parentDir
+          ? `${parentDir}/${baseName}.abi`
+          : `/${baseName}.abi`;
+
+        const asmFile = await getFile(asmFileName);
+        if (!asmFile || !asmFile.content) {
+          return null;
+        }
+
+        const asm = Asm.assemble(asmFile.content);
+        if (!asm.success) {
+          console.error('Failed to assemble .asm file:', asm.error);
+          return null;
+        }
+
+        const abiFile = await getFile(abiFileName);
+        let abiContent = abiFile ? abiFile.content : '';
+        if (abiFile) {
+          try {
+            const abiObj = JSON.parse(abiFile.content);
+            abiObj.address = asm.hash;
+            abiContent = JSON.stringify(abiObj);
+          } catch (e) {
+            console.error('Failed to parse ABI', e);
+          }
+        }
+
+        const compiledResult: CompiledResult = {
+          bytecode: asm.bytecode,
+          abi: abiContent,
+          hash: asm.hash,
+        };
+
+        setCompiledResult(sourceFile.name, compiledResult);
+        return compiledResult;
+      } catch (error) {
+        console.error('Failed to restore compiled result:', error);
+        return null;
+      }
+    },
+    [setCompiledResult],
+  );
+
+  // Auto-select first contract if none selected
+  useEffect(() => {
+    if (cFiles.length > 0 && !selectedFileId && cFiles[0]) {
+      setSelectedFileId(cFiles[0].id);
+    }
+  }, [cFiles, selectedFileId, setSelectedFileId]);
+
+  // Try to restore compiled result from IndexedDB if missing in memory
+  useEffect(() => {
+    if (selectedFile && !compiledResultMap.has(selectedFile.name)) {
+      restoreCompiledResultFromStorage(selectedFile);
+    }
+  }, [selectedFile, compiledResultMap, restoreCompiledResultFromStorage]);
 
   const generateTemplate = async (sourceFile: FileType, timestamp: string) => {
     try {
@@ -139,7 +208,19 @@ export default function DeployPanel() {
       return;
     }
 
-    const result = compiledResultMap.get(selectedFile.name);
+    let result = compiledResultMap.get(selectedFile.name);
+    if (!result) {
+      result =
+        (await restoreCompiledResultFromStorage(selectedFile)) ?? undefined;
+      if (result) {
+        addLog(
+          `Restored compiled result from storage for ${selectedFile.name}`,
+          {hash: result.hash},
+          LogLevel.INFO,
+        );
+      }
+    }
+
     if (!result) {
       toast.error('Please compile the contract first');
       return;
