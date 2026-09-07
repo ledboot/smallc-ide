@@ -240,13 +240,6 @@ export class DebugWebSocketClient {
         this.pendingRequests.delete(request.id);
         reject(err);
       }
-
-      // Wrap resolve to clear timeout
-      const originalResolve = resolve;
-      const originalReject = reject;
-
-      // We don't actually need to re-assign resolve/reject here because we usependingRequests.get()
-      // But for clarity on cleaning up the timeout, it's handled in handleResponse
     });
   }
 

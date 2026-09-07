@@ -9,9 +9,11 @@ interface CompileResult {
 class CompilerService {
   private worker: Worker | null = null;
   private isReady = false;
+  private readyPromise: Promise<void> | null = null;
   private pendingResolve: ((value: CompileResult) => void) | null = null;
   private pendingReject: ((reason: any) => void) | null = null;
   private outputBuffer = '';
+  private compiling = false;
 
   constructor() {
     if (typeof window !== 'undefined') {
@@ -20,10 +22,11 @@ class CompilerService {
   }
 
   public init(): Promise<void> {
-    if (this.worker) return Promise.resolve();
+    if (this.readyPromise) return this.readyPromise;
 
-    return new Promise((resolve, reject) => {
+    this.readyPromise = new Promise((resolve, reject) => {
       try {
+        this.isReady = false;
         this.worker = new Worker(
           new URL('../workers/compiler.worker.js', import.meta.url),
         );
@@ -66,59 +69,72 @@ class CompilerService {
 
         this.worker.onerror = e => {
           console.error('Worker error:', e);
+          this.isReady = false;
+          this.readyPromise = null;
           reject(e);
         };
       } catch (e) {
+        this.isReady = false;
+        this.readyPromise = null;
         reject(e);
       }
     });
+
+    return this.readyPromise;
   }
 
   private cleanup() {
     this.pendingResolve = null;
     this.pendingReject = null;
-    // Keep worker alive
+    if (this.worker) {
+      this.worker.terminate();
+      this.worker = null;
+    }
+    this.isReady = false;
+    this.readyPromise = null;
+
+    // Immediately start pre-warming the next worker
+    this.init().catch(err =>
+      console.error('Failed to pre-warm next compiler worker:', err),
+    );
   }
 
   public async compile(
     files: FileType[],
     args: string[],
   ): Promise<CompileResult> {
-    if (!this.worker) await this.init();
-
-    // Wait for ready state if needed
-    if (!this.isReady) {
-      // Simple poll
-      let retries = 0;
-      while (!this.isReady && retries < 20) {
-        await new Promise(r => setTimeout(r, 100));
-        retries++;
-      }
-      if (!this.isReady) throw new Error('Compiler worker not ready');
+    if (this.compiling) {
+      throw new Error('Compilation already in progress');
     }
+    this.compiling = true;
 
-    return new Promise((resolve, reject) => {
-      if (this.pendingResolve) {
-        reject(new Error('Compilation already in progress'));
-        return;
-      }
+    try {
+      await this.init();
 
-      this.pendingResolve = resolve;
-      this.pendingReject = reject;
-      this.outputBuffer = '';
+      return await new Promise<CompileResult>((resolve, reject) => {
+        this.pendingResolve = resolve;
+        this.pendingReject = reject;
+        this.outputBuffer = '';
 
-      this.worker?.postMessage({
-        type: 'COMPILE',
-        payload: {
-          args: args,
-          files: files.map(f => ({name: f.name, content: f.content})),
-        },
+        this.worker?.postMessage({
+          type: 'COMPILE',
+          payload: {
+            args: args,
+            files: files.map(f => ({name: f.name, content: f.content})),
+          },
+        });
       });
-    });
+    } finally {
+      this.compiling = false;
+    }
   }
 
   public isReadyState(): boolean {
     return this.isReady;
+  }
+
+  public isBusy(): boolean {
+    return this.compiling;
   }
 }
 

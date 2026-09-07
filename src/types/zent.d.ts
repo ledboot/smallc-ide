@@ -5,9 +5,10 @@
 
 export interface ZentUtxo {
   txid: string;
-  vout: number;
+  index: number;
   value: number; // satoshis
-  status?: string;
+  tokenType: string;
+  address?: string;
   scriptPubKey?: string;
 }
 
@@ -16,6 +17,7 @@ export interface ZentNetwork {
   chainId: number;
   name: string;
   rpcUrl?: string;
+  icon: string;
 }
 
 export interface ZentBalance {
@@ -35,21 +37,39 @@ export interface ZentProvider {
   getCurrentAccount(): Promise<{address: string} | null>;
   /** Get the active network. */
   getNetwork(): Promise<ZentNetwork>;
+  /** Get all available networks. */
+  getNetworks(): Promise<{[key: string]: ZentNetwork}>;
   /** Switch to a different network by chainId. */
   switchNetwork(chainId: number): Promise<void>;
   /** Get balance for an address. */
   getBalance(address: string, chainId?: number): Promise<ZentBalance>;
-  /** Get spendable UTXOs for an address. */
-  getUtxos(address: string): Promise<ZentUtxo[]>;
+
+  getCurrentAccountUtxos(): Promise<ZentUtxo[]>;
   /**
    * Sign a raw transaction hex.
    * The extension will prompt the user for approval.
    */
   signTransaction(rawTxHex: string): Promise<{signedTransaction: string}>;
   /**
+   * Sign a text message.
+   * The extension will prompt the user for approval.
+   */
+  signMessage(message: string): Promise<string>;
+  /**
    * Broadcast a signed raw transaction hex.
    */
   sendTransaction(signedTxHex: string): Promise<{txHash: string}>;
+  /**
+   * Simulate a contract transaction hex without broadcasting.
+   */
+  tryContract(rawTxHex: string): Promise<{id: string; error: any; result: any}>;
+  /**
+   * Call a contract method with prepared params.
+   */
+  contractCall(
+    contractAddress: string,
+    params: string,
+  ): Promise<{id: string; error: any; result: any}>;
 
   // EventEmitter API
   on(event: 'connect', listener: (data: unknown) => void): this;

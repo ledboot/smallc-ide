@@ -2,7 +2,43 @@ import {sha256 as nobleSha256} from '@noble/hashes/sha2.js';
 import bigInt from 'big-integer';
 import {getMonacoInstance} from '@/lib/monaco-instance';
 import {useConsoleStore, LogLevel} from '@/state/useConsole';
+import {useWalletStore} from '@/state/useWallet';
 import {BUNDLED_UTILS_CODE} from './bundledUtils';
+
+const RUNNER_GLOBAL_TYPES = `
+interface RunnerWalletApi {
+  connect(): Promise<string[]>
+  getCurrentAccount(): Promise<string | null>
+  getNetwork(): Promise<any>
+  getCurrentAccountUtxos(value?: number | bigint): Promise<any[]>;
+  signTransaction(rawTxHex: string): Promise<string>
+  sendTransaction(signedHex: string): Promise<string>
+  tryContract(rawTxHex: string): Promise<{id: string; error: any; result: any}>
+  contractCall(
+    contractAddress: string,
+    params: string
+  ): Promise<{id: string; error: any; result: any}>
+}
+`;
+
+const flattenMessageText = (messageText: any): string => {
+  if (typeof messageText === 'string') return messageText;
+  if (!messageText) return 'Unknown TypeScript error';
+
+  let message = messageText.messageText ?? '';
+  let next = messageText.next;
+  while (Array.isArray(next) && next.length > 0) {
+    const first = next[0];
+    if (!first) break;
+    const nextText =
+      typeof first.messageText === 'string'
+        ? first.messageText
+        : JSON.stringify(first.messageText);
+    message += ` ${nextText}`;
+    next = first.next;
+  }
+  return message;
+};
 
 /**
  * Creates a shimmed 'require' function for the contract runner environment.
@@ -15,8 +51,12 @@ export function createRequireShim() {
       case '@noble/hashes/sha2':
       case '@noble/hashes/sha2.js':
         return {sha256: nobleSha256};
-      case 'big-integer':
-        return {default: bigInt};
+      case 'big-integer': {
+        const bigIntModule = bigInt as any;
+        bigIntModule.default = bigInt;
+        bigIntModule.__esModule = true;
+        return bigIntModule;
+      }
       default:
         throw new Error(
           `Module '${moduleName}' is not available in the contract runner environment.`,
@@ -54,7 +94,14 @@ export async function runContractMethod(
     return;
   }
 
-  const code = `${BUNDLED_UTILS_CODE}\n\n${scriptCode}`;
+  const hasWalletApiDeclaration =
+    /\bdeclare\s+(const|let|var)\s+walletApi\b/.test(scriptCode);
+  const walletApiDeclaration = hasWalletApiDeclaration
+    ? ''
+    : '\ndeclare const walletApi: RunnerWalletApi\n';
+  const codePrefix = `${RUNNER_GLOBAL_TYPES}${walletApiDeclaration}\n${BUNDLED_UTILS_CODE}\n\n`;
+  const code = `${codePrefix}${scriptCode}`;
+  const prefixLineCount = codePrefix.split('\n').length - 1;
   // const code = `${scriptCode}`;
 
   try {
@@ -75,8 +122,11 @@ export async function runContractMethod(
     defaults.setCompilerOptions({
       ...originalOptions,
       module: monaco.languages.typescript.ModuleKind.CommonJS,
-      target: monaco.languages.typescript.ScriptTarget.ES2016,
+      target: monaco.languages.typescript.ScriptTarget.ES2020,
       noEmit: false,
+      allowSyntheticDefaultImports: true,
+      esModuleInterop: true,
+      lib: ['es2020', 'dom'],
     });
 
     // Get the worker proxy
@@ -86,6 +136,43 @@ export async function runContractMethod(
 
     // Compile
     const result = await client.getEmitOutput(uri.toString());
+
+    const syntacticDiagnostics = await client.getSyntacticDiagnostics(
+      uri.toString(),
+    );
+    const semanticDiagnostics = await client.getSemanticDiagnostics(
+      uri.toString(),
+    );
+    const diagnostics = [...syntacticDiagnostics, ...semanticDiagnostics];
+    const errorDiagnostics = diagnostics.filter((d: any) => d.category === 1);
+    const userErrorDiagnostics = errorDiagnostics.filter((diagnostic: any) => {
+      const start = diagnostic.start;
+      if (start === undefined || start === null) return false;
+      const position = model.getPositionAt(start);
+      return position.lineNumber > prefixLineCount;
+    });
+
+    if (userErrorDiagnostics.length > 0) {
+      userErrorDiagnostics.slice(0, 5).forEach((diagnostic: any) => {
+        const start = diagnostic.start ?? 0;
+        const position = model.getPositionAt(start);
+        const message = flattenMessageText(diagnostic.messageText);
+        const userLine = Math.max(1, position.lineNumber - prefixLineCount);
+        addLog(
+          `TS${diagnostic.code} ${userLine}:${position.column} ${message}`,
+          LogLevel.ERROR,
+        );
+      });
+
+      const hasAwaitDiagnostic = userErrorDiagnostics.some(
+        (diagnostic: any) => diagnostic.code === 1308,
+      );
+      addLog('TypeScript compile failed in user script.', LogLevel.ERROR);
+      if (hasAwaitDiagnostic) {
+        addLog('Tip: if using await, mark method as async.', LogLevel.ERROR);
+      }
+      return;
+    }
 
     // Restore options (optional, maybe we want to keep it?)
     // defaults.setCompilerOptions(originalOptions);
@@ -153,6 +240,34 @@ const executeJS = async (code: string, methodName: string, args: any[]) => {
     },
   };
 
+  const walletApi = {
+    connect: async () => {
+      await useWalletStore.getState().connect();
+      return useWalletStore.getState().accounts;
+    },
+    getCurrentAccount: async () => {
+      return useWalletStore.getState().currentAccount;
+    },
+    getNetwork: async () => {
+      return useWalletStore.getState().network;
+    },
+    getCurrentAccountUtxos: async (value?: number | bigint) => {
+      return useWalletStore.getState().getCurrentAccountUtxos(value);
+    },
+    signTransaction: async (rawTxHex: string) => {
+      return useWalletStore.getState().signTransaction(rawTxHex);
+    },
+    sendTransaction: async (signedHex: string) => {
+      return useWalletStore.getState().sendTransaction(signedHex);
+    },
+    tryContract: async (rawTxHex: string) => {
+      return useWalletStore.getState().tryContract(rawTxHex);
+    },
+    contractCall: async (contractAddress: string, params: string) => {
+      return useWalletStore.getState().contractCall(contractAddress, params);
+    },
+  };
+
   // Evaluate
   try {
     const exports: any = {};
@@ -161,8 +276,14 @@ const executeJS = async (code: string, methodName: string, args: any[]) => {
     // We intentionally don't "use strict" globally here so that new Function behaves a bit more loosely,
     // but the emitted code might have it.
     // We pass exports and require to simulate CommonJS environment.
-    const fun = new Function('console', 'require', 'exports', code);
-    fun(hijackedConsole, require, exports);
+    const fun = new Function(
+      'console',
+      'require',
+      'exports',
+      'walletApi',
+      code,
+    );
+    fun(hijackedConsole, require, exports, walletApi);
 
     if (methodName) {
       if (exports[methodName] && typeof exports[methodName] === 'function') {

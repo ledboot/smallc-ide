@@ -50,7 +50,7 @@ export const useConsoleStore = create<ConsoleStore>((set, get) => ({
         if (typeof m === 'string') return m;
         try {
           return JSON.stringify(m, null, 2);
-        } catch (e) {
+        } catch {
           return String(m);
         }
       })

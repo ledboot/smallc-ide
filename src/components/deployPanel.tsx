@@ -1,8 +1,7 @@
 'use client';
 
-import {useState} from 'react';
+import {useState, useEffect, useCallback} from 'react';
 import {Button} from '@/components/ui/button';
-import {Input} from '@/components/ui/input';
 import {Label} from '@/components/ui/label';
 import {
   Select,
@@ -11,54 +10,54 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {Badge} from '@/components/ui/badge';
 import {
   RocketIcon,
   FuelIcon as GasIcon,
-  NetworkIcon,
   InfoIcon,
   FileIcon,
 } from 'lucide-react';
-import type {FileType} from '@/types';
-import {ChainType, CHAIN_INFO} from '@/constants';
-import {useSettingsStore} from '@/state/useSettings';
+import type {FileType, CompiledResult} from '@/types';
+
 import {toast} from 'sonner';
 import {MsgT} from '@/utils/msgTools';
-import {rpcClient} from '@/lib/api';
 import {bytesToHex2} from '@/utils/index';
 import {TinDef, ToutDef} from '@/utils/defs';
 import {Address} from '@/utils/address';
 import {getFile, saveFile, createFolder} from '@/lib/db';
 import {generateContractTemplate} from '@/utils/templateGenerator';
+import {cn} from '@/utils/twMerge';
+import {Asm} from '@/lib/asm';
 
 import {useCompilerStore} from '@/state/useCompiler';
 import {useDeployStore} from '@/state/useDeploy';
 import {useConsoleStore, LogLevel} from '@/state/useConsole';
 import {useFileStore} from '@/state/useFile';
+import {useWalletStore} from '@/state/useWallet';
 
 export default function DeployPanel() {
-  const chainType = useSettingsStore(state => state.chainType);
   const compiledResultMap = useCompilerStore(state => state.compiledResultMap);
+  const setCompiledResult = useCompilerStore(state => state.setCompiledResult);
   const [isDeploying, setIsDeploying] = useState(false);
-  const [deploymentResult, setDeploymentResult] = useState<string | null>(null);
-  const setChainType = useSettingsStore(state => state.setChainType);
   const {files, refreshFiles} = useFileStore();
 
   const {
-    privateKey,
-    setPrivateKey,
-    utxo,
-    setUtxo,
-    utxoValueStr,
-    setUtxoValueStr,
-    selectedFileId,
-    setSelectedFileId,
-  } = useDeployStore();
+    isConnected,
+    currentAccount,
+    network,
+    getCurrentAccountUtxos,
+    signTransaction,
+    sendTransaction,
+  } = useWalletStore();
+
+  const {selectedFileId, setSelectedFileId} = useDeployStore();
 
   const {addLog} = useConsoleStore();
 
   const cFiles = files.filter(
-    file => file.name.endsWith('.c') && !file.isDirectory,
+    file =>
+      file.name.endsWith('.c') &&
+      !file.isDirectory &&
+      file.name !== 'buildin.c',
   );
 
   const selectedFile = cFiles.find(file => file.id === selectedFileId) ?? null;
@@ -67,13 +66,82 @@ export default function DeployPanel() {
     setSelectedFileId(fileId);
   };
 
-  const generateTemplate = async (
-    sourceFileName: string,
-    timestamp: string,
-  ) => {
+  const restoreCompiledResultFromStorage = useCallback(
+    async (sourceFile: FileType): Promise<CompiledResult | null> => {
+      try {
+        const baseName = sourceFile.name.split('.').slice(0, -1).join('.');
+        const lastSlashIndex = sourceFile.id.lastIndexOf('/');
+        const parentDir =
+          lastSlashIndex > 0 ? sourceFile.id.substring(0, lastSlashIndex) : '';
+        const asmFileName = parentDir
+          ? `${parentDir}/${baseName}.asm`
+          : `/${baseName}.asm`;
+        const abiFileName = parentDir
+          ? `${parentDir}/${baseName}.abi`
+          : `/${baseName}.abi`;
+
+        const asmFile = await getFile(asmFileName);
+        if (!asmFile || !asmFile.content) {
+          return null;
+        }
+
+        const asm = Asm.assemble(asmFile.content);
+        if (!asm.success) {
+          console.error('Failed to assemble .asm file:', asm.error);
+          return null;
+        }
+
+        const abiFile = await getFile(abiFileName);
+        let abiContent = abiFile ? abiFile.content : '';
+        if (abiFile) {
+          try {
+            const abiObj = JSON.parse(abiFile.content);
+            abiObj.address = asm.hash;
+            abiContent = JSON.stringify(abiObj);
+          } catch (e) {
+            console.error('Failed to parse ABI', e);
+          }
+        }
+
+        const compiledResult: CompiledResult = {
+          bytecode: asm.bytecode,
+          abi: abiContent,
+          hash: asm.hash,
+        };
+
+        setCompiledResult(sourceFile.name, compiledResult);
+        return compiledResult;
+      } catch (error) {
+        console.error('Failed to restore compiled result:', error);
+        return null;
+      }
+    },
+    [setCompiledResult],
+  );
+
+  // Auto-select first contract if none selected
+  useEffect(() => {
+    if (cFiles.length > 0 && !selectedFileId && cFiles[0]) {
+      setSelectedFileId(cFiles[0].id);
+    }
+  }, [cFiles, selectedFileId, setSelectedFileId]);
+
+  // Try to restore compiled result from IndexedDB if missing in memory
+  useEffect(() => {
+    if (selectedFile && !compiledResultMap.has(selectedFile.name)) {
+      restoreCompiledResultFromStorage(selectedFile);
+    }
+  }, [selectedFile, compiledResultMap, restoreCompiledResultFromStorage]);
+
+  const generateTemplate = async (sourceFile: FileType, timestamp: string) => {
     try {
-      const baseName = sourceFileName.split('.').slice(0, -1).join('.');
-      const abiFileName = `/${baseName}.abi`;
+      const baseName = sourceFile.name.split('.').slice(0, -1).join('.');
+      const lastSlashIndex = sourceFile.id.lastIndexOf('/');
+      const parentDir =
+        lastSlashIndex > 0 ? sourceFile.id.substring(0, lastSlashIndex) : '';
+      const abiFileName = parentDir
+        ? `${parentDir}/${baseName}.abi`
+        : `/${baseName}.abi`;
       const abiFile = await getFile(abiFileName);
       console.log('abiFile', abiFile);
       if (!abiFile) {
@@ -130,148 +198,138 @@ export default function DeployPanel() {
   };
 
   const handleDeploy = async () => {
+    if (!isConnected || !currentAccount) {
+      toast.error('Please connect your wallet first');
+      return;
+    }
+
     if (!selectedFile || !selectedFile.name.endsWith('.c')) {
       toast.error('Please select a contract to deploy');
       return;
     }
 
-    if (!privateKey || !utxo) {
-      toast.error('Please enter a private key and UTXO');
-      return;
+    let result = compiledResultMap.get(selectedFile.name);
+    if (!result) {
+      result =
+        (await restoreCompiledResultFromStorage(selectedFile)) ?? undefined;
+      if (result) {
+        addLog(
+          `Restored compiled result from storage for ${selectedFile.name}`,
+          {hash: result.hash},
+          LogLevel.INFO,
+        );
+      }
     }
 
-    if (!utxo.includes(':')) {
-      toast.error('Please enter a valid UTXO');
-      return;
-    }
-    const [hash, index] = utxo.split(':');
-    if (!hash || !index) {
-      toast.error('Please enter a valid UTXO');
-      return;
-    }
-
-    if (!utxoValueStr) {
-      toast.error('Please enter a UTXO value');
-      return;
-    }
-
-    const result = compiledResultMap.get(selectedFile.name);
     if (!result) {
       toast.error('Please compile the contract first');
       return;
     }
-    console.log('compiledResult', result);
 
     setIsDeploying(true);
-    setDeploymentResult(null);
 
-    const script = '88' + result.hash + '00000000' + result.bytecode;
+    try {
+      // 1. Fetch UTXOs from wallet
+      // 2. Prepare the contract deployment script
+      // SmallC Deployment format: 0x88 (OP_DEPLOY) + contractHash + 00000000 + bytecode
+      const script = '88' + result.hash + '00000000' + result.bytecode;
+      const fee = 1200 + script.length * 1000; // Legacy fee calculation
+      const minRequiredValue = BigInt(fee + 1000);
+      const utxos = await getCurrentAccountUtxos(minRequiredValue);
 
-    const msg = new MsgT();
-    msg.version = 0x11;
-    msg.txDef = [];
-    const tinDef = new TinDef();
-    if (utxo) {
+      if (!utxos || utxos.length === 0) {
+        throw new Error('No UTXOs found in your wallet');
+      }
+
+      // 3. Find a suitable UTXO (simplistic selection: first one with enough balance)
+      // Note: SmallC UTXOs usually have tokenType 0 for ZENT.
+      const selectedUtxo = utxos.find(u => BigInt(u.value) >= minRequiredValue);
+      if (!selectedUtxo) {
+        throw new Error(
+          `Insufficient funds. Need at least ${fee + 1000} satoshis.`,
+        );
+      }
+
+      const msg = new MsgT();
+      msg.version = 0x11;
+      msg.txDef = [];
+
+      const tinDef = new TinDef();
       tinDef.previousOutPoint = {
-        hash,
-        index: parseInt(index),
+        hash: selectedUtxo.txid,
+        index: selectedUtxo.index,
       };
       tinDef.signatureIndex = 0;
       tinDef.sequence = 0xffffffff;
-    }
-    msg.tIn.push(tinDef);
+      msg.tIn.push(tinDef);
 
-    const toutDef = new ToutDef();
-    toutDef.tokenType = 0n;
-    toutDef.value = 0n;
-    toutDef.pkScript = script;
+      // Output 1: Contract deployment script
+      const toutDef = new ToutDef();
+      toutDef.tokenType = 0n;
+      toutDef.value = 0n;
+      toutDef.pkScript = script;
 
-    const fee = 1200 + script.length * 1000;
-    console.log('fee', fee);
+      // Output 2: Change
+      const changeToutDef = new ToutDef();
+      changeToutDef.tokenType = 0n;
+      const changeAmount = BigInt(selectedUtxo.value) - BigInt(fee);
+      changeToutDef.value = changeAmount;
+      // Use connected account address for change
+      changeToutDef.pkScript = Address.toPkScript(currentAccount);
 
-    const changeToutDef = new ToutDef();
-    changeToutDef.tokenType = 0n;
-    const changeAmount = BigInt(utxoValueStr) - BigInt(fee);
-    console.log('changeAmount', changeAmount);
-    console.log('utxoValueStr', utxoValueStr);
-    console.log('fee', fee);
+      msg.tOut.push(toutDef, changeToutDef);
+      msg.lockTime = 0;
+      msg.signatureScripts = [];
+      const rawTx = msg.encode(0);
+      const rawTxHex = bytesToHex2(rawTx);
 
-    if (changeAmount < 0) {
-      toast.error('Insufficient funds for deployment and fee.');
-      setIsDeploying(false);
-      return;
-    }
-    changeToutDef.value = changeAmount;
-    changeToutDef.pkScript = Address.toPkScript(
-      'mszzWYjHEpmGx2LmdZLtud64PADqFHNhHD',
-    );
+      // 4. Sign via wallet extension
+      addLog('Requesting signature from wallet...', null, LogLevel.INFO);
+      const signedTxHex = await signTransaction(rawTxHex);
+      addLog('Transaction signed', {signedTxHex}, LogLevel.SUCCESS);
 
-    msg.tOut.push(toutDef, changeToutDef);
-    msg.lockTime = 0;
-    msg.signatureScripts = [];
-    const rawTx = msg.encode(0);
-    const rawTxHex = bytesToHex2(rawTx);
+      // 5. Broadcast via wallet extension
+      addLog('Broadcasting transaction...', null, LogLevel.INFO);
+      const txHash = await sendTransaction(signedTxHex);
+      addLog('Transaction broadcasted!', {txHash}, LogLevel.SUCCESS);
 
-    // signrawtransaction
-    const signedTx = await rpcClient
-      .getClient(chainType)
-      .signRawTransaction(rawTxHex, [], [privateKey], false);
-    if (signedTx.error) {
-      toast.error('Sign raw transaction failed');
-      addLog('Sign raw transaction failed', signedTx, LogLevel.ERROR);
-      setIsDeploying(false);
-      return;
-    }
-    addLog('Sign raw transaction result', signedTx);
+      toast.success('Contract deployed successfully!');
 
-    // sendrawtransaction
-    const txHash = await rpcClient
-      .getClient(chainType)
-      .sendRawTransaction(signedTx.result.hex);
-    if (txHash.error) {
-      toast.error('Send raw transaction failed');
-      addLog('Send raw transaction failed', txHash, LogLevel.ERROR);
-      setIsDeploying(false);
-      return;
-    }
-    addLog('Send raw transaction result', txHash);
-    console.log('txHash', txHash.result);
-    setIsDeploying(false);
+      // 6. Post-deployment persistence
+      const timestamp = Math.floor(Date.now() / 1000).toString();
+      const templateFileId = await generateTemplate(selectedFile, timestamp);
 
-    toast.success('Transaction sent successfully');
-    const timestamp = Math.floor(Date.now() / 1000).toString();
-
-    const templateFileId = await generateTemplate(selectedFile.name, timestamp);
-
-    // --- Persistence Logic ---
-    try {
       const baseName = selectedFile.name.split('.').slice(0, -1).join('.');
-      const abiFileName = `/${baseName}.abi`;
+      const lastSlashIndex = selectedFile.id.lastIndexOf('/');
+      const parentDir =
+        lastSlashIndex > 0 ? selectedFile.id.substring(0, lastSlashIndex) : '';
+      const abiFileName = parentDir
+        ? `${parentDir}/${baseName}.abi`
+        : `/${baseName}.abi`;
       const abiFile = await getFile(abiFileName);
 
       const methodIdentifiers: Record<string, string> = {};
       if (abiFile) {
         try {
           const abi = JSON.parse(abiFile.content);
-          // Filter out address and extract method signatures and hashes
           Object.entries(abi).forEach(([key, value]) => {
             if (key !== 'address' && key !== '') {
               methodIdentifiers[key] = value as string;
             }
           });
         } catch (e) {
-          console.error('Failed to parse ABI for persistence', e);
+          console.error('Failed to parse ABI', e);
         }
       }
 
       const runData = {
-        hash: txHash.result,
+        hash: txHash,
         contractAddress: result.hash,
         transaction: {
-          from: 'mszzWYjHEpmGx2LmdZLtud64PADqFHNhHD',
+          from: currentAccount,
           gas: fee.toString(),
           input: rawTxHex,
-          chainId: chainType,
+          chainId: network?.chainId || 1,
         },
         tsFile: templateFileId,
         methodIdentifiers: methodIdentifiers,
@@ -279,42 +337,35 @@ export default function DeployPanel() {
 
       const broadcastDir = `/.broadcast/${selectedFile.name}`;
       await createFolder(broadcastDir);
-
       const runJsonContent = JSON.stringify(runData, null, 2);
 
-      // Save timestamped version (using current time, might slightly differ from generateTemplate's time but that is creating the TS file, this describes the RUN)
-      const runTimestampFilename = `${broadcastDir}/run-${timestamp}.json`;
       await saveFile({
-        id: runTimestampFilename,
+        id: `${broadcastDir}/run-${timestamp}.json`,
         name: `run-${timestamp}.json`,
         content: runJsonContent,
-        path: runTimestampFilename,
+        path: `${broadcastDir}/run-${timestamp}.json`,
         isDirectory: false,
         lastModified: new Date().toISOString(),
       });
 
-      // Save latest version
-      const runLatestFilename = `${broadcastDir}/run-latest.json`;
       await saveFile({
-        id: runLatestFilename,
+        id: `${broadcastDir}/run-latest.json`,
         name: 'run-latest.json',
         content: runJsonContent,
-        path: runLatestFilename,
+        path: `${broadcastDir}/run-latest.json`,
         isDirectory: false,
         lastModified: new Date().toISOString(),
       });
       refreshFiles();
-
-      console.log('Deployment info saved to', runLatestFilename);
-    } catch (e) {
-      console.error('Failed to persist deployment info', e);
-      toast.error('Failed to save deployment info');
+    } catch (e: any) {
+      console.error('Deployment failed:', e);
+      addLog('Deployment Error', e.message || e, LogLevel.ERROR);
+      toast.error(e.message || 'Deployment failed');
+    } finally {
+      setIsDeploying(false);
     }
   };
 
-  const handleSetChainType = (chainType: ChainType) => {
-    setChainType(chainType);
-  };
   return (
     <div className="flex h-full flex-col p-2 pt-4 space-y-10">
       {/* Integrated Header */}
@@ -328,94 +379,11 @@ export default function DeployPanel() {
       </div>
 
       <div className="flex-1 space-y-10 pr-1">
-        {/* Environment Section - Flat */}
-        <div className="space-y-6">
-          <div className="space-y-6 px-1">
-            <div className="space-y-2">
-              <Label htmlFor="network" className="text-xs font-semibold">
-                TARGET NETWORK
-              </Label>
-              <Select value={chainType} onValueChange={handleSetChainType}>
-                <SelectTrigger
-                  id="network"
-                  className="h-12 transition-all hover:bg-muted/40 focus:ring-0 focus:ring-offset-0 focus:ring-primary/20"
-                >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="border-none shadow-xl bg-background/95 backdrop-blur-md">
-                  {Object.entries(CHAIN_INFO).map(([type, info]) => (
-                    <SelectItem key={type} value={type}>
-                      <div className="flex items-center gap-3 py-1">
-                        <NetworkIcon className="h-4 w-4 opacity-50" />
-                        <span className="font-medium">{info.label}</span>
-                        <Badge
-                          variant="outline"
-                          className="ml-auto text-[9px] font-black tracking-tighter h-4 border-muted-foreground/20"
-                        >
-                          {info.chainId}
-                        </Badge>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="private-key" className="text-xs font-semibold">
-                  WALLET CREDENTIALS
-                </Label>
-                <Input
-                  id="private-key"
-                  type="password"
-                  value={privateKey}
-                  onChange={e => setPrivateKey(e.target.value)}
-                  placeholder="Enter private key (WIF)"
-                  className="h-12 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:opacity-50"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="utxo" className="text-xs font-semibold ">
-                    INPUT UTXO
-                  </Label>
-                  <Input
-                    id="utxo"
-                    type="text"
-                    value={utxo}
-                    onChange={e => setUtxo(e.target.value)}
-                    placeholder="txid:index"
-                    className="h-12 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:opacity-50"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label
-                    htmlFor="utxo-value"
-                    className="text-xs font-semibold "
-                  >
-                    AMOUNT
-                  </Label>
-                  <Input
-                    id="utxo-value"
-                    type="text"
-                    value={utxoValueStr}
-                    onChange={e => setUtxoValueStr(e.target.value)}
-                    placeholder="Value"
-                    className="h-12 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:opacity-50"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
         {/* Deploy Section - Flat */}
         <div className="space-y-6">
           <div className="flex items-center gap-2 px-1 border-t pt-8">
             <FileIcon className="h-4 w-4 text-primary/70" />
-            <span className="text-sm font-bold uppercase tracking-widest">
+            <span className="text-sm font-bold tracking-widest">
               Contract Deployment
             </span>
           </div>
@@ -450,27 +418,31 @@ export default function DeployPanel() {
                     ))}
                   </SelectContent>
                 </Select>
-                {selectedFile && (
-                  <p className="text-[10px] font-bold text-primary/60 mt-2 px-2 uppercase tracking-widest animate-pulse">
-                    Target: {selectedFile.name}
-                  </p>
-                )}
               </div>
-
               <div className="flex justify-center">
                 <Button
-                  onClick={handleDeploy}
-                  disabled={isDeploying || !selectedFile}
-                  className="w-[220px] h-14 text-sm font-black uppercase tracking-widest bg-primary text-primary-foreground transition-all hover:scale-[1.01] active:scale-[0.98] shadow-lg shadow-primary/20"
+                  onClick={isConnected ? handleDeploy : undefined}
+                  disabled={isDeploying || (isConnected && !selectedFile)}
+                  className={cn(
+                    'w-fit px-8 h-10 text-xs font-bold tracking-widest transition-all hover:scale-[1.02] active:scale-[0.98] shadow-md shadow-primary/20 rounded-xl group relative overflow-hidden border-none',
+                    !isConnected &&
+                      'bg-muted text-muted-foreground cursor-not-allowed opacity-70',
+                  )}
                 >
-                  {isDeploying ? (
+                  <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/10 to-white/0 -translate-x-full group-hover:animate-shimmer pointer-events-none" />
+                  {!isConnected ? (
                     <>
-                      <GasIcon className="mr-3 h-5 w-5 animate-spin" />
+                      <InfoIcon className="mr-2 h-4 w-4" />
+                      Connect Wallet
+                    </>
+                  ) : isDeploying ? (
+                    <>
+                      <GasIcon className="mr-2 h-4 w-4 animate-spin" />
                       Deploying...
                     </>
                   ) : (
                     <>
-                      <RocketIcon className="mr-3 h-5 w-5 fill-current" />
+                      <RocketIcon className="mr-2 h-4 w-4 fill-current transition-transform group-hover:scale-110" />
                       Deploy
                     </>
                   )}
@@ -485,7 +457,7 @@ export default function DeployPanel() {
               <p className="text-sm font-bold text-muted-foreground/80">
                 No Artifacts
               </p>
-              <p className="text-xs text-muted-foreground/60 mt-1 max-w-[200px] text-center font-medium">
+              <p className="text-xs text-muted-foreground/60 mt-1 max-w-50 text-center font-medium">
                 Compile your contract first to generate deployable code.
               </p>
             </div>

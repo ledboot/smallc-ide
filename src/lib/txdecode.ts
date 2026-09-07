@@ -40,8 +40,6 @@ function readInt32(hex: string, offset: number): [number, number] {
 
 function readUInt64LE(hex: string, offset: number): [string, number] {
   // 返回字符串，避免大数精度丢失
-  const low = parseInt(hex.slice(offset, offset + 8), 16);
-  const high = parseInt(hex.slice(offset + 8, offset + 16), 16);
   const val = BigInt('0x' + hex.slice(offset, offset + 16)).toString();
   return [val, offset + 16];
 }

@@ -143,6 +143,7 @@ export const processStructType = async (
               value: BigInt('0x' + fieldValue).toString(),
             };
           } catch (e) {
+            console.error(`Failed to process field ${fieldName}`, e);
             result[fieldName] = {
               type: fieldType,
               value: '0x' + fieldValue,

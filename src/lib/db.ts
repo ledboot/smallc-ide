@@ -170,6 +170,25 @@ export const deleteFolder = async (path: string): Promise<void> => {
 };
 
 /**
+ * Clear all files and folders in the workspace
+ */
+export const clearWorkspace = async (): Promise<void> => {
+  const fs = await getFS();
+  const entries = await fs.extended.readdir('/');
+
+  for (const entry of entries) {
+    const fullPath = `/${entry}`;
+    const stat = await fs.extended.stat(fullPath);
+
+    if (stat.isDirectory()) {
+      await deleteFolder(fullPath);
+    } else {
+      await deleteFile(fullPath);
+    }
+  }
+};
+
+/**
  * Get files in a specific folder (non-recursive)
  */
 export const getFilesByPath = async (

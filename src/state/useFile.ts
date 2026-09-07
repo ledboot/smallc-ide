@@ -20,7 +20,7 @@ interface FileStore {
 
 export const useFileStore = create<FileStore>()(
   persist(
-    (set, get) => ({
+    (set, _get) => ({
       files: [],
       isLoading: false,
       error: null,

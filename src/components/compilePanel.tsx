@@ -13,7 +13,7 @@ import {Label} from '@/components/ui/label';
 import {Badge} from '@/components/ui/badge';
 import {PlayIcon, InfoIcon, FileIcon, Bug} from 'lucide-react';
 import {Switch} from '@/components/ui/switch';
-import type {CompiledResult, FileType} from '@/types';
+import type {FileType} from '@/types';
 import {compilerService, isWasmReady} from '@/lib/wasm-compiler';
 import {saveFile} from '@/lib/db';
 import {toast} from 'sonner';
@@ -22,25 +22,25 @@ import {Asm} from '@/lib/asm';
 
 import {LogLevel, useConsoleStore} from '@/state/useConsole';
 import {useCompilerStore} from '@/state/useCompiler';
-import {useSettingsStore} from '@/state/useSettings';
+
 import {useFileStore} from '@/state/useFile';
 
 export default function CompilePanel() {
   const [selectedFile, setSelectedFile] = useState<string>('');
   const [isCompiling, setIsCompiling] = useState(false);
 
-  const [compiledData, setCompiledData] = useState<CompiledResult | null>(null);
   const [debugMode, setDebugMode] = useState(false);
 
   const {addLog} = useConsoleStore();
-  const chainType = useSettingsStore(state => state.chainType);
-  const compiledResultMap = useCompilerStore(state => state.compiledResultMap);
   const setCompiledResult = useCompilerStore(state => state.setCompiledResult);
   const {files, refreshFiles} = useFileStore();
 
-  // Filter out .c and .ts files
+  // Filter out .c and .ts files, excluding buildin.c
   const sourceFiles = files.filter(
-    file => file.name.endsWith('.c') && !file.isDirectory,
+    file =>
+      file.name.endsWith('.c') &&
+      !file.isDirectory &&
+      file.name !== 'buildin.c',
   );
   // Automatically select first file
   useEffect(() => {
@@ -49,19 +49,11 @@ export default function CompilePanel() {
     }
   }, [sourceFiles, selectedFile]);
 
-  useEffect(() => {
-    const file = sourceFiles.find(f => f.id === selectedFile);
-    if (file) {
-      const compiledResult = compiledResultMap.get(file.name);
-      if (compiledResult) {
-        setCompiledData(compiledResult);
-      } else {
-        setCompiledData(null);
-      }
-    }
-  }, [compiledResultMap, selectedFile, sourceFiles]);
-
   const handleCompile = async () => {
+    if (isCompiling || compilerService.isBusy()) {
+      return;
+    }
+
     if (!selectedFile) {
       toast.error('Please select a file to compile');
       return;
@@ -129,7 +121,9 @@ export default function CompilePanel() {
         }`,
       );
     } finally {
-      setIsCompiling(false);
+      if (!compilerService.isBusy()) {
+        setIsCompiling(false);
+      }
     }
   };
 
@@ -145,6 +139,20 @@ export default function CompilePanel() {
     if (asmFile && abiFile) {
       const asm = Asm.assemble(asmFile.content);
 
+      const lastSlashIndex = sourceFile.id.lastIndexOf('/');
+      const parentDir =
+        lastSlashIndex > 0 ? sourceFile.id.substring(0, lastSlashIndex) : '';
+
+      const asmPath = parentDir
+        ? `${parentDir}/${asmFile.name}`
+        : `/${asmFile.name}`;
+      const abiPath = parentDir
+        ? `${parentDir}/${abiFile.name}`
+        : `/${abiFile.name}`;
+      const dbgPath = parentDir
+        ? `${parentDir}/${sourceFile.name.split('.')[0]}.dbg`
+        : `/${sourceFile.name.split('.')[0]}.dbg`;
+
       if (asm.success) {
         const abiContent = JSON.parse(abiFile.content);
         abiContent.address = asm.hash;
@@ -152,9 +160,10 @@ export default function CompilePanel() {
 
         if (debugMode) {
           await saveFile({
-            id: sourceFile.name.split('.')[0] + '.dbg',
+            id: dbgPath,
             name: sourceFile.name.split('.')[0] + '.dbg',
             content: asm.debugInfo,
+            path: dbgPath,
             lastModified: new Date().toISOString(),
           });
         }
@@ -167,15 +176,17 @@ export default function CompilePanel() {
       }
       // 保存所有输出文件到DB
       await saveFile({
-        id: asmFile.name,
+        id: asmPath,
         name: asmFile.name,
         content: asmFile.content,
+        path: asmPath,
         lastModified: new Date().toISOString(),
       });
       await saveFile({
-        id: abiFile.name,
+        id: abiPath,
         name: abiFile.name,
         content: abiFile.content,
+        path: abiPath,
         lastModified: new Date().toISOString(),
       });
       await refreshFiles();
@@ -281,16 +292,17 @@ export default function CompilePanel() {
           <Button
             onClick={handleCompile}
             disabled={isCompiling || !selectedFile || sourceFiles.length === 0}
-            className="w-55 h-14 text-sm font-black uppercase tracking-widest bg-primary text-primary-foreground transition-all hover:scale-[1.01] active:scale-[0.98] shadow-lg shadow-primary/20"
+            className="w-fit px-8 h-10 text-xs font-bold tracking-widest bg-primary text-primary-foreground transition-all hover:scale-[1.02] active:scale-[0.98] shadow-md shadow-primary/20 rounded-xl group relative overflow-hidden border-none"
           >
+            <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/10 to-white/0 -translate-x-full group-hover:animate-shimmer pointer-events-none" />
             {isCompiling ? (
               <>
-                <PlayIcon className="mr-3 h-5 w-5 animate-spin" />
+                <PlayIcon className="mr-3 h-5 w-5 animate-pulse" />
                 Processing...
               </>
             ) : (
               <>
-                <PlayIcon className="mr-3 h-5 w-5 fill-current" />
+                <PlayIcon className="mr-3 h-5 w-5 fill-current transition-transform group-hover:scale-110" />
                 {selectedFile?.endsWith('.ts')
                   ? 'Execute Script'
                   : 'Build Contract'}

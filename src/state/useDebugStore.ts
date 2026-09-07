@@ -1,8 +1,7 @@
 import {create} from 'zustand';
 import type {DebugNode} from '@/types';
 import {rpcClient, RPCClient} from '@/lib/api';
-import {DebugCallType} from '@/constants';
-import {useSettingsStore} from './useSettings';
+import {ChainType, DebugCallType} from '@/constants';
 import {getFile} from '@/lib/db';
 import {toast} from 'sonner';
 import {useFileStore} from './useFile';
@@ -108,8 +107,7 @@ export const useDebugStore = create<DebugState & DebugActions>((set, get) => ({
 
   // WebSocket connection management
   connectDebugWS: async () => {
-    const {chainType} = useSettingsStore.getState();
-    const wsClient = getDebugWSClient(chainType);
+    const wsClient = getDebugWSClient(ChainType.ZENT_TESTNET);
     try {
       await wsClient.connect();
 
@@ -145,8 +143,7 @@ export const useDebugStore = create<DebugState & DebugActions>((set, get) => ({
   },
 
   disconnectDebugWS: () => {
-    const {chainType} = useSettingsStore.getState();
-    disconnectDebugWSClient(chainType);
+    disconnectDebugWSClient(ChainType.ZENT_TESTNET);
     set({wsClient: null, wsConnected: false});
   },
 
@@ -170,8 +167,7 @@ export const useDebugStore = create<DebugState & DebugActions>((set, get) => ({
     if (wsClient && wsConnected && wsClient.isReady()) {
       return wsClient;
     }
-    const {chainType} = useSettingsStore.getState();
-    return rpcClient.getClient(chainType);
+    return rpcClient.getClient(ChainType.ZENT_TESTNET);
   },
 
   // Preparse variables for a given VM line (method)
@@ -382,7 +378,6 @@ export const useDebugStore = create<DebugState & DebugActions>((set, get) => ({
       setDebugCallStack,
     } = get();
     const debugClient = getDebugClient();
-    const {chainType} = useSettingsStore.getState();
     const {addLog} = useConsoleStore.getState();
 
     try {
@@ -418,7 +413,7 @@ export const useDebugStore = create<DebugState & DebugActions>((set, get) => ({
               rawValue,
               varType,
               debugInfo,
-              chainType,
+              ChainType.ZENT_TESTNET,
               debugClient,
               varSize,
               varInfo.structure,

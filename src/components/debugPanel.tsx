@@ -1,9 +1,16 @@
 'use client';
 
-import {DebugCallType} from '@/constants';
+import {DebugCallType, ChainType} from '@/constants';
 import {useState, useEffect} from 'react';
 import {useShallow} from 'zustand/react/shallow';
-import {FileIcon, Bug, ChevronDown, ChevronUp} from 'lucide-react';
+import {
+  FileIcon,
+  Bug,
+  ChevronDown,
+  ChevronUp,
+  Zap,
+  Loader2,
+} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {Label} from '@/components/ui/label';
 import {
@@ -13,10 +20,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {useSettingsStore} from '@/state/useSettings';
-import {rpcClient} from '@/lib/api';
 import {toast} from 'sonner';
 import {runContractMethod} from '@/utils/contractRunner';
+import {getRPCClient} from '@/lib/api';
 import {
   Tooltip,
   TooltipContent,
@@ -35,12 +41,21 @@ import {
 import {useFileStore} from '@/state/useFile';
 import {useConsoleStore, LogLevel} from '@/state/useConsole';
 import {useDebugStore} from '@/state/useDebugStore';
-
+import {useWalletStore} from '@/state/useWallet';
 import {useTabsStore} from '@/state/useTabs';
+import {useNodeStore} from '@/state/useNodeStore';
 
 export default function DebugPanel() {
-  const chainType = useSettingsStore(state => state.chainType);
   const handleOpenFile = useTabsStore(state => state.handleOpenFile);
+  const {leasedNode, timeRemaining, releaseNode, leaseNode, isLeasing} =
+    useNodeStore();
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
   const {
     isDebugging,
     debugSession,
@@ -77,15 +92,30 @@ export default function DebugPanel() {
     state.files.find(f => f.id === currentDebugFileId),
   );
 
-  // Filter C files for debugging
+  // Filter C files for debugging, excluding buildin.c
   const files = useFileStore(
     useShallow(state =>
-      state.files.filter(file => file.name.endsWith('.c') && !file.isDirectory),
+      state.files.filter(
+        file =>
+          file.name.endsWith('.c') &&
+          !file.isDirectory &&
+          file.name !== 'buildin.c',
+      ),
     ),
   );
 
   const [runDataList, setRunDataList] = useState<any[]>([]);
   const {addLog} = useConsoleStore();
+  const {
+    isConnected,
+    currentAccount,
+    connect,
+    isExtensionAvailable,
+    signTransaction,
+    sendTransaction,
+    tryContract,
+    contractCall,
+  } = useWalletStore();
 
   useEffect(() => {
     const fetchRunData = async () => {
@@ -135,7 +165,7 @@ export default function DebugPanel() {
       }
     };
     fetchRunData();
-  }, [currentDebugFileId, loadDebugInfo]);
+  }, [currentDebugFileId, debugFile, loadDebugInfo]);
 
   const handleMethodCall = async (
     methodSignature: string,
@@ -169,51 +199,37 @@ export default function DebugPanel() {
         return;
       }
 
-      // Step 2: Call different API methods based on apiType
-      let result;
-      const client = rpcClient.getClient(chainType);
-
+      // Step 2: Execute method through wallet extension
       switch (apiType) {
         case 'sendRawTransaction': {
-          const privateKey = process.env.NEXT_PUBLIC_PRIVATE_KEY || '';
-          if (!privateKey) {
-            toast.error('Private key not found in environment variables');
+          if (!isConnected || !currentAccount) {
+            toast.error('Please connect your wallet first');
             return;
           }
 
-          // Sign the transaction first
-          const signedTx = await client.signRawTransaction(
-            rawTx,
-            [],
-            [privateKey],
-            false,
+          addLog('Requesting signature from wallet...', null, LogLevel.INFO);
+          const signedTxHex = await signTransaction(rawTx);
+          addLog('Transaction signed', {signedTxHex}, LogLevel.SUCCESS);
+
+          addLog('Broadcasting transaction...', null, LogLevel.INFO);
+          const txHash = await sendTransaction(signedTxHex);
+          addLog(
+            'sendRawTransaction executed successfully',
+            {txHash},
+            LogLevel.SUCCESS,
           );
-          if (signedTx.error) {
-            toast.error('Sign raw transaction failed');
-            addLog('Sign Error:', signedTx.error, LogLevel.ERROR);
-            return;
-          }
-
-          // Send the signed transaction
-          result = await client.sendRawTransaction(signedTx.result.hex);
-          if (result.error) {
-            toast.error('Send raw transaction failed');
-            addLog('Send Error:', result.error, LogLevel.ERROR);
-            return;
-          }
-          addLog('sendRawTransaction executed successfully', result);
           toast.success('Transaction sent successfully');
           break;
         }
 
         case 'tryContract': {
-          result = await client.tryContract(rawTx);
+          const result = await tryContract(rawTx);
           if (result.error) {
             toast.error('Try contract failed');
             addLog('tryContract Error:', result.error, LogLevel.ERROR);
             return;
           }
-          addLog('tryContract executed successfully', result);
+          addLog('tryContract executed successfully', result, LogLevel.SUCCESS);
           toast.success('Contract tried successfully');
           break;
         }
@@ -228,13 +244,17 @@ export default function DebugPanel() {
             return;
           }
 
-          result = await client.contractCall(runData.contractAddress, rawTx);
+          const result = await contractCall(runData.contractAddress, rawTx);
           if (result.error) {
             toast.error('Contract call failed');
             addLog('contractcall Error:', result.error, LogLevel.ERROR);
             return;
           }
-          addLog('contractcall executed successfully', result);
+          addLog(
+            'contractcall executed successfully',
+            result,
+            LogLevel.SUCCESS,
+          );
           toast.success('Contract called successfully');
           break;
         }
@@ -249,6 +269,42 @@ export default function DebugPanel() {
   const attachDebugSession = async () => {
     if (!debugFile) {
       toast.error('Please select a file to debug');
+      return;
+    }
+
+    if (!leasedNode) {
+      toast.error(
+        'No active Dedicated RPC lease. Please lease a Dedicated RPC node first.',
+      );
+      return;
+    }
+
+    const checkToastId = toast.loading('Verifying RPC node connectivity...');
+    try {
+      const client = getRPCClient(ChainType.ZENT_TESTNET);
+      console.log('client', client);
+      const checkResult = (await Promise.race([
+        client.rpcCall('getblockchaininfo'),
+        new Promise((_, reject) =>
+          setTimeout(
+            () => reject(new Error('Connection timed out after 5 seconds')),
+            5000,
+          ),
+        ),
+      ])) as any;
+
+      if (!checkResult || checkResult.error !== null) {
+        throw new Error(
+          checkResult?.error?.message || 'Invalid JSON-RPC response',
+        );
+      }
+      toast.dismiss(checkToastId);
+    } catch (err: any) {
+      toast.dismiss(checkToastId);
+      toast.error('No available RPC node found or node is offline', {
+        description:
+          err.message || 'Please verify your RPC node configuration.',
+      });
       return;
     }
 
@@ -383,7 +439,7 @@ export default function DebugPanel() {
   };
 
   return (
-    <div className="flex h-full flex-col p-2 pt-4 space-y-10">
+    <div className="flex h-full flex-col p-2 pt-4 space-y-6">
       {/* Integrated Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -393,6 +449,143 @@ export default function DebugPanel() {
           <h2 className="text-xl font-bold tracking-tight">Debugger</h2>
         </div>
       </div>
+
+      {/* Leased RPC Node Information Card */}
+      {leasedNode && (
+        <div className="flex flex-col gap-1.5 p-3.5 rounded-2xl bg-gradient-to-r from-emerald-500/10 to-teal-500/10 border border-emerald-500/20 shadow-[0_0_12px_rgba(16,185,129,0.06)] animate-fade-in">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+              <span className="text-[10px] font-black tracking-wider text-emerald-400 uppercase">
+                Dedicated RPC Leased
+              </span>
+            </div>
+            <span className="text-[10px] font-bold font-mono text-emerald-400 bg-emerald-500/15 px-2 py-0.5 rounded-full border border-emerald-500/10">
+              {formatTime(timeRemaining)}
+            </span>
+          </div>
+          <div className="mt-1 space-y-1 divide-y divide-emerald-500/5">
+            <div className="flex items-center justify-between text-[10px] text-muted-foreground pt-1 first:pt-0">
+              <span>Node Name</span>
+              <span className="font-semibold text-emerald-400/90">
+                {leasedNode.name}
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-[10px] text-muted-foreground pt-1 first:pt-0">
+              <span>http(s) endpoint</span>
+              <span className="font-mono text-foreground/80">
+                {leasedNode.httpsEndpoint}
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-[10px] text-muted-foreground pt-1 first:pt-0">
+              <span>ws(s) endpoint</span>
+              <span className="font-mono text-foreground/80">
+                {leasedNode.wssEndpoint}
+              </span>
+            </div>
+          </div>
+          <div className="mt-2.5 pt-2 border-t border-emerald-500/10 flex justify-end">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={releaseNode}
+              className="h-6 px-2.5 text-[10px] text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-full border border-red-500/20 hover:border-red-500/35 transition-colors cursor-pointer"
+            >
+              ReleaseNode
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {!leasedNode && (
+        <div
+          className={
+            'flex flex-col gap-4 p-5 rounded-2xl border backdrop-blur-md ' +
+            'bg-gradient-to-br from-indigo-500/10 via-purple-500/5 to-pink-500/10 ' +
+            'border-indigo-500/20 shadow-[0_0_20px_rgba(99,102,241,0.08)] ' +
+            'transition-all duration-300 hover:shadow-[0_0_30px_rgba(99,102,241,0.15)] ' +
+            'hover:border-indigo-500/30 animate-fade-in'
+          }
+        >
+          <div className="flex items-center gap-3">
+            <div
+              className={
+                'p-2.5 bg-indigo-500/15 rounded-xl border border-indigo-500/20 ' +
+                'shadow-[0_0_15px_rgba(99,102,241,0.15)]'
+              }
+            >
+              <Zap className="h-5 w-5 text-indigo-400 animate-pulse" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold tracking-wide text-indigo-400 uppercase">
+                Dedicated Debug RPC
+              </h3>
+              <p className="text-[10px] text-muted-foreground mt-0.5">
+                Lease an exclusive node for zero-delay debugging.
+              </p>
+            </div>
+          </div>
+
+          <div
+            className={
+              'text-xs text-muted-foreground/80 leading-relaxed bg-zinc-950/20 ' +
+              'p-3 rounded-xl border border-white/5 font-medium'
+            }
+          >
+            Requires signing a secure cryptographic challenge via your Zent
+            Wallet extension to verify ownership and authorize the node lease.
+          </div>
+
+          <div className="flex flex-col gap-2">
+            {!isExtensionAvailable ? (
+              <div
+                className={
+                  'text-center p-2 rounded-xl bg-amber-500/10 border border-amber-500/20 ' +
+                  'text-[10px] font-semibold text-amber-400'
+                }
+              >
+                Zent Wallet Extension not detected. Please install it first.
+              </div>
+            ) : !isConnected ? (
+              <Button
+                onClick={connect}
+                className={
+                  'w-full h-9 text-xs bg-zinc-900/80 hover:bg-zinc-800 text-zinc-100 ' +
+                  'border border-zinc-700/80 hover:border-zinc-600 rounded-xl ' +
+                  'transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] ' +
+                  'cursor-pointer'
+                }
+              >
+                Connect Wallet to Lease
+              </Button>
+            ) : (
+              <Button
+                onClick={() => leaseNode()}
+                disabled={isLeasing}
+                className={
+                  'w-full h-9 text-xs text-white font-medium rounded-xl transition-all ' +
+                  'bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 ' +
+                  'hover:to-purple-700 shadow-lg shadow-indigo-500/25 ' +
+                  'hover:shadow-indigo-600/35 hover:scale-[1.02] active:scale-[0.98] ' +
+                  'cursor-pointer disabled:opacity-50 disabled:hover:scale-100 duration-300'
+                }
+              >
+                {isLeasing ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Leasing Dedicated Node...
+                  </span>
+                ) : (
+                  'Lease RPC Node'
+                )}
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="flex-1 space-y-10 pr-1">
         {/* Session Discovery - Flat */}

@@ -127,7 +127,7 @@ const ConsolePanel = () => {
       {/* Log display */}
       <div
         ref={containerRef}
-        className="flex-1 overflow-auto bg-black rounded-md p-3 font-mono text-xs leading-relaxed break-words whitespace-pre-wrap"
+        className="flex-1 overflow-auto bg-black rounded-md p-3 font-mono text-xs leading-relaxed break-words whitespace-pre-wrap console-scrollbar"
       >
         {filteredLogs.length === 0 ? (
           <div className="text-muted-foreground text-center py-8">
